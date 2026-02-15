@@ -16,14 +16,22 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "rollup -c",
+    "prepare": "rollup -c",
     "test": "vitest run",
     "test:watch": "vitest",
     "verify": "tsx scripts/verify-connection.ts"
   },
-  "keywords": ["niconico", "live", "comment", "stream"],
+  "keywords": [
+    "niconico",
+    "live",
+    "comment",
+    "stream"
+  ],
   "author": "Segu_g <segusegment@gmail.com>",
-  "contributors": ["Claude <noreply@anthropic.com>"],
+  "contributors": [
+    "Claude <noreply@anthropic.com>"
+  ],
   "license": "MIT",
   "dependencies": {
     "protobufjs": "^7.4.0",
@@ -32,6 +40,9 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/ws": "^8.5.0",
+    "rollup": "^4.57.1",
+    "rollup-plugin-dts": "^6.3.0",
+    "rollup-plugin-esbuild": "^6.2.1",
     "tsx": "^4.0.0",
     "typescript": "^5.6.0",
     "vitest": "^3.0.0"
