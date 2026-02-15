@@ -22,10 +22,8 @@
     "verify": "tsx scripts/verify-connection.ts"
   },
   "keywords": ["niconico", "live", "comment", "stream"],
-  "author": [
-    "segument <segusegment@gmail.com>",
-    "Claude <noreply@anthropic.com>"
-  ],
+  "author": "Segu_g <segusegment@gmail.com>",
+  "contributors": ["Claude <noreply@anthropic.com>"],
   "license": "MIT",
   "dependencies": {
     "protobufjs": "^7.4.0",
