@@ -4,8 +4,8 @@ export interface Comment {
   id: string;
   /** コメント本文 */
   content: string;
-  /** ユーザーID */
-  userId: string;
+  /** ユーザーID（匿名の場合はundefined） */
+  userId?: string;
   /** 投稿日時 */
   timestamp: Date;
   /** プラットフォーム名 */
