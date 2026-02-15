@@ -1,0 +1,140 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { NiconicoProvider } from '../src/providers/niconico/NiconicoProvider.js';
+import type { Comment, ConnectionState } from '../src/interfaces/types.js';
+import WebSocket, { WebSocketServer } from 'ws';
+import http from 'http';
+import {
+  createSegmentEntry,
+  createFullCommentMessage,
+} from './helpers/protobufTestData.js';
+
+describe('NiconicoProvider', () => {
+  let httpServer: http.Server;
+  let wss: WebSocketServer;
+  let httpPort: number;
+  let wsPort: number;
+
+  beforeEach(async () => {
+    // HTTPサーバー（放送ページ + セグメントサーバー模擬）
+    httpServer = http.createServer((req, res) => {
+      if (req.url?.startsWith('/watch/')) {
+        // 放送ページ模擬
+        const wsUrl = `ws://localhost:${wsPort}`;
+        const props = JSON.stringify({
+          site: { relive: { webSocketUrl: wsUrl } },
+        }).replace(/"/g, '&quot;');
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end(`<div id="embedded-data" data-props="${props}"></div>`);
+      } else if (req.url?.startsWith('/segment/')) {
+        // セグメントサーバー模擬
+        res.writeHead(200, { 'Content-Type': 'application/octet-stream' });
+        const data = createFullCommentMessage({
+          no: 1,
+          content: 'テストコメント',
+          hashedUserId: 'a:testuser',
+        });
+        res.end(Buffer.from(data));
+      } else {
+        res.writeHead(404);
+        res.end();
+      }
+    });
+
+    await new Promise<void>((resolve) => httpServer.listen(0, resolve));
+    httpPort = (httpServer.address() as { port: number }).port;
+
+    // WebSocketサーバー（視聴WS模擬）
+    wss = new WebSocketServer({ port: 0 });
+    await new Promise<void>((resolve) => wss.on('listening', resolve));
+    wsPort = (wss.address() as { port: number }).port;
+
+    wss.on('connection', (ws) => {
+      ws.on('message', (data) => {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'startWatching') {
+          // messageServerを返す
+          const segmentUri = `http://localhost:${httpPort}/segment/1`;
+          const viewUri = `http://localhost:${httpPort}/view?v=1`;
+
+          // まずmessageServerを送信（実際にはこのviewUriへのHTTP接続が必要だが
+          // テストではセグメントURIを直接返す形で簡略化）
+          ws.send(
+            JSON.stringify({
+              type: 'messageServer',
+              data: { viewUri },
+            }),
+          );
+        }
+      });
+    });
+  });
+
+  afterEach(() => {
+    wss.close();
+    httpServer.close();
+  });
+
+  it('状態遷移: disconnected → connecting → connected', async () => {
+    const states: ConnectionState[] = [];
+
+    // fetchWebSocketUrlをモックして直接WebSocket URLを返す
+    const provider = new NiconicoProvider({ liveId: 'lv123' });
+    provider.on('stateChange', (state) => states.push(state));
+
+    // エラーハンドラを追加（messageServer接続の404を無視）
+    provider.on('error', () => {});
+
+    // fetchWebSocketUrlをオーバーライド
+    (provider as any).fetchWebSocketUrl = async () =>
+      `ws://localhost:${wsPort}`;
+
+    await provider.connect();
+
+    expect(states).toContain('connecting');
+    expect(states).toContain('connected');
+
+    provider.disconnect();
+    expect(states).toContain('disconnected');
+  });
+
+  it('disconnectで全接続が切断される', async () => {
+    const provider = new NiconicoProvider({ liveId: 'lv123' });
+    provider.on('error', () => {});
+    (provider as any).fetchWebSocketUrl = async () =>
+      `ws://localhost:${wsPort}`;
+
+    await provider.connect();
+    provider.disconnect();
+
+    // 再度disconnectしてもエラーにならない
+    provider.disconnect();
+  });
+
+  it('放送ページからWebSocket URLを取得できる', async () => {
+    const provider = new NiconicoProvider({ liveId: 'lv123' });
+
+    // fetchWebSocketUrlの内部を直接テスト
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/watch/')) {
+        const wsUrl = `ws://localhost:${wsPort}`;
+        const props = JSON.stringify({
+          site: { relive: { webSocketUrl: wsUrl } },
+        }).replace(/"/g, '&quot;');
+        return new Response(
+          `<div id="embedded-data" data-props="${props}"></div>`,
+          { status: 200 },
+        );
+      }
+      return new Response('', { status: 404 });
+    };
+
+    try {
+      const wsUrl = await (provider as any).fetchWebSocketUrl();
+      expect(wsUrl).toBe(`ws://localhost:${wsPort}`);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});

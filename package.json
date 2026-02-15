@@ -1,0 +1,37 @@
+{
+  "name": "nicomview",
+  "version": "0.1.0",
+  "description": "Multi-platform live comment provider library",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./niconico": {
+      "types": "./dist/providers/niconico/index.d.ts",
+      "import": "./dist/providers/niconico/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "verify": "tsx scripts/verify-connection.ts"
+  },
+  "keywords": ["niconico", "live", "comment", "stream"],
+  "license": "MIT",
+  "dependencies": {
+    "protobufjs": "^7.4.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}

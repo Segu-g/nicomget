@@ -1,0 +1,196 @@
+import { EventEmitter } from 'events';
+import type { ICommentProvider } from '../../interfaces/ICommentProvider.js';
+import type { Comment, ConnectionState } from '../../interfaces/types.js';
+import type { NicoChat } from './ProtobufParser.js';
+import { WebSocketClient } from './WebSocketClient.js';
+import { MessageStream } from './MessageStream.js';
+import { SegmentStream } from './SegmentStream.js';
+
+export interface NiconicoProviderOptions {
+  liveId: string;
+  cookies?: string;
+}
+
+/**
+ * ニコニコ生放送コメントプロバイダー。
+ * ICommentProvider を実装し、放送ページからコメントを取得する。
+ */
+export class NiconicoProvider extends EventEmitter implements ICommentProvider {
+  private readonly liveId: string;
+  private readonly cookies?: string;
+  private wsClient: WebSocketClient | null = null;
+  private messageStream: MessageStream | null = null;
+  private segmentStreams: SegmentStream[] = [];
+  private fetchedSegments = new Set<string>();
+  private state: ConnectionState = 'disconnected';
+
+  constructor(options: NiconicoProviderOptions) {
+    super();
+    this.liveId = options.liveId;
+    this.cookies = options.cookies;
+  }
+
+  async connect(): Promise<void> {
+    this.setState('connecting');
+
+    try {
+      // Step 1: 放送ページからWebSocket URLを取得
+      const webSocketUrl = await this.fetchWebSocketUrl();
+
+      // Step 2: 視聴WebSocketに接続
+      this.wsClient = new WebSocketClient(webSocketUrl);
+
+      this.wsClient.on('messageServer', (viewUri: string) => {
+        this.startMessageStream(viewUri);
+      });
+
+      this.wsClient.on('disconnect', (reason: string) => {
+        this.emit('error', new Error(`Disconnected: ${reason}`));
+        this.setState('disconnected');
+      });
+
+      this.wsClient.on('error', (error: Error) => {
+        this.emit('error', error);
+      });
+
+      this.wsClient.on('close', () => {
+        this.setState('disconnected');
+      });
+
+      await this.wsClient.connect();
+      this.setState('connected');
+    } catch (error) {
+      this.setState('error');
+      throw error;
+    }
+  }
+
+  disconnect(): void {
+    this.wsClient?.disconnect();
+    this.messageStream?.stop();
+    for (const s of this.segmentStreams) s.stop();
+    this.segmentStreams = [];
+    this.fetchedSegments.clear();
+    this.wsClient = null;
+    this.messageStream = null;
+    this.setState('disconnected');
+  }
+
+  private setState(state: ConnectionState): void {
+    if (this.state !== state) {
+      this.state = state;
+      this.emit('stateChange', state);
+    }
+  }
+
+  /** 放送ページのHTMLからWebSocket URLを取得する */
+  private async fetchWebSocketUrl(): Promise<string> {
+    const url = `https://live.nicovideo.jp/watch/${this.liveId}`;
+    const headers: Record<string, string> = {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      Accept:
+        'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
+    };
+    if (this.cookies) headers['Cookie'] = this.cookies;
+
+    const response = await fetch(url, { headers });
+    if (!response.ok) {
+      throw new Error(`Failed to fetch broadcast page: ${response.status}`);
+    }
+
+    const html = await response.text();
+    const match = html.match(/id="embedded-data"\s+data-props="([^"]+)"/);
+    if (!match) {
+      throw new Error('Could not find embedded data in the page');
+    }
+
+    const propsJson = match[1]
+      .replace(/&quot;/g, '"')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>');
+
+    const props = JSON.parse(propsJson);
+    const wsUrl = props.site?.relive?.webSocketUrl;
+    if (!wsUrl) {
+      throw new Error('WebSocket URL not found in broadcast data');
+    }
+
+    return wsUrl;
+  }
+
+  private startMessageStream(viewUri: string): void {
+    this.messageStream?.stop();
+    this.messageStream = new MessageStream(viewUri, this.cookies);
+
+    this.messageStream.on('segment', (segmentUri: string) => {
+      this.startSegmentStream(segmentUri);
+    });
+
+    this.messageStream.on('next', (nextAt: string) => {
+      // 次のストリーム接続を開始
+      this.messageStream?.stop();
+      this.messageStream = new MessageStream(viewUri, this.cookies);
+      this.setupMessageStreamHandlers(viewUri);
+      this.messageStream.start(nextAt).catch((err) => this.emit('error', err));
+    });
+
+    this.messageStream.on('error', (error: Error) => {
+      this.emit('error', error);
+    });
+
+    this.messageStream.start('now').catch((err) => this.emit('error', err));
+  }
+
+  private setupMessageStreamHandlers(viewUri: string): void {
+    if (!this.messageStream) return;
+
+    this.messageStream.on('segment', (segmentUri: string) => {
+      this.startSegmentStream(segmentUri);
+    });
+
+    this.messageStream.on('next', (nextAt: string) => {
+      this.messageStream?.stop();
+      this.messageStream = new MessageStream(viewUri, this.cookies);
+      this.setupMessageStreamHandlers(viewUri);
+      this.messageStream.start(nextAt).catch((err) => this.emit('error', err));
+    });
+
+    this.messageStream.on('error', (error: Error) => {
+      this.emit('error', error);
+    });
+  }
+
+  private startSegmentStream(segmentUri: string): void {
+    if (this.fetchedSegments.has(segmentUri)) return;
+    this.fetchedSegments.add(segmentUri);
+
+    const segment = new SegmentStream(segmentUri, this.cookies);
+
+    segment.on('chat', (chat: NicoChat) => {
+      const comment: Comment = {
+        id: String(chat.no),
+        content: chat.content,
+        userId: chat.hashedUserId || (chat.rawUserId ? String(chat.rawUserId) : ''),
+        timestamp: new Date(),
+        platform: 'niconico',
+        raw: chat,
+      };
+      this.emit('comment', comment);
+    });
+
+    segment.on('error', (error: Error) => {
+      this.emit('error', error);
+    });
+
+    segment.on('end', () => {
+      const idx = this.segmentStreams.indexOf(segment);
+      if (idx >= 0) this.segmentStreams.splice(idx, 1);
+    });
+
+    this.segmentStreams.push(segment);
+    segment.start().catch((err) => this.emit('error', err));
+  }
+}
