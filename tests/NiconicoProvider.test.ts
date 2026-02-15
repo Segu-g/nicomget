@@ -110,6 +110,103 @@ describe('NiconicoProvider', () => {
     provider.disconnect();
   });
 
+  it('WebSocket切断後に再接続を試みる', async () => {
+    const states: ConnectionState[] = [];
+    const provider = new NiconicoProvider({
+      liveId: 'lv123',
+      retryIntervalMs: 50,
+    });
+    provider.on('stateChange', (state) => states.push(state));
+    provider.on('error', () => {});
+    (provider as any).fetchWebSocketUrl = async () =>
+      `ws://localhost:${wsPort}`;
+
+    await provider.connect();
+    expect(states).toContain('connected');
+
+    // サーバー側からWebSocketを切断
+    for (const client of wss.clients) {
+      client.close();
+    }
+
+    // 再接続を待つ
+    await new Promise<void>((resolve) => {
+      const onState = (state: ConnectionState) => {
+        if (state === 'connected' && states.filter((s) => s === 'connected').length >= 2) {
+          provider.off('stateChange', onState);
+          resolve();
+        }
+      };
+      provider.on('stateChange', onState);
+    });
+
+    expect(states.filter((s) => s === 'connecting').length).toBeGreaterThanOrEqual(2);
+    expect(states.filter((s) => s === 'connected').length).toBeGreaterThanOrEqual(2);
+
+    provider.disconnect();
+  });
+
+  it('maxRetries超過でエラー発火', async () => {
+    const provider = new NiconicoProvider({
+      liveId: 'lv123',
+      maxRetries: 2,
+      retryIntervalMs: 50,
+    });
+    provider.on('error', () => {});
+
+    let connectCount = 0;
+    (provider as any).fetchWebSocketUrl = async () => {
+      connectCount++;
+      if (connectCount === 1) {
+        return `ws://localhost:${wsPort}`;
+      }
+      throw new Error('Connection refused');
+    };
+
+    await provider.connect();
+
+    // サーバー側からWebSocketを切断
+    for (const client of wss.clients) {
+      client.close();
+    }
+
+    // エラーイベントを待つ
+    const error = await new Promise<Error>((resolve) => {
+      provider.on('error', (err: Error) => {
+        if (err.message.includes('Reconnection failed')) {
+          resolve(err);
+        }
+      });
+    });
+
+    expect(error.message).toBe('Reconnection failed after 2 attempts');
+
+    provider.disconnect();
+  });
+
+  it('disconnect()後は再接続しない', async () => {
+    const states: ConnectionState[] = [];
+    const provider = new NiconicoProvider({
+      liveId: 'lv123',
+      retryIntervalMs: 50,
+    });
+    provider.on('stateChange', (state) => states.push(state));
+    provider.on('error', () => {});
+    (provider as any).fetchWebSocketUrl = async () =>
+      `ws://localhost:${wsPort}`;
+
+    await provider.connect();
+    provider.disconnect();
+
+    // 再接続が起こらないことを確認するため少し待つ
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    // disconnected以降にconnectingが来ていないことを確認
+    const disconnectIdx = states.lastIndexOf('disconnected');
+    const statesAfterDisconnect = states.slice(disconnectIdx + 1);
+    expect(statesAfterDisconnect).not.toContain('connecting');
+  });
+
   it('放送ページからWebSocket URLを取得できる', async () => {
     const provider = new NiconicoProvider({ liveId: 'lv123' });
 

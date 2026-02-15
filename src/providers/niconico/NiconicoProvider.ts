@@ -9,6 +9,8 @@ import { SegmentStream } from './SegmentStream.js';
 export interface NiconicoProviderOptions {
   liveId: string;
   cookies?: string;
+  maxRetries?: number;
+  retryIntervalMs?: number;
 }
 
 /**
@@ -18,46 +20,35 @@ export interface NiconicoProviderOptions {
 export class NiconicoProvider extends EventEmitter implements ICommentProvider {
   private readonly liveId: string;
   private readonly cookies?: string;
+  private readonly maxRetries: number;
+  private readonly retryIntervalMs: number;
   private wsClient: WebSocketClient | null = null;
   private messageStream: MessageStream | null = null;
   private segmentStreams: SegmentStream[] = [];
   private fetchedSegments = new Set<string>();
   private state: ConnectionState = 'disconnected';
+  private intentionalDisconnect = false;
+  private reconnectCount = 0;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(options: NiconicoProviderOptions) {
     super();
     this.liveId = options.liveId;
     this.cookies = options.cookies;
+    this.maxRetries = options.maxRetries ?? 5;
+    this.retryIntervalMs = options.retryIntervalMs ?? 5000;
   }
 
   async connect(): Promise<void> {
+    this.intentionalDisconnect = false;
     this.setState('connecting');
 
     try {
       // Step 1: 放送ページからWebSocket URLを取得
       const webSocketUrl = await this.fetchWebSocketUrl();
 
-      // Step 2: 視聴WebSocketに接続
-      this.wsClient = new WebSocketClient(webSocketUrl);
-
-      this.wsClient.on('messageServer', (viewUri: string) => {
-        this.startMessageStream(viewUri);
-      });
-
-      this.wsClient.on('disconnect', (reason: string) => {
-        this.emit('error', new Error(`Disconnected: ${reason}`));
-        this.setState('disconnected');
-      });
-
-      this.wsClient.on('error', (error: Error) => {
-        this.emit('error', error);
-      });
-
-      this.wsClient.on('close', () => {
-        this.setState('disconnected');
-      });
-
-      await this.wsClient.connect();
+      await this.connectWebSocket(webSocketUrl);
+      this.reconnectCount = 0;
       this.setState('connected');
     } catch (error) {
       this.setState('error');
@@ -65,7 +56,39 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
     }
   }
 
+  private async connectWebSocket(webSocketUrl: string): Promise<void> {
+    this.wsClient = new WebSocketClient(webSocketUrl);
+
+    this.wsClient.on('messageServer', (viewUri: string) => {
+      this.startMessageStream(viewUri);
+    });
+
+    this.wsClient.on('disconnect', (reason: string) => {
+      this.emit('error', new Error(`Disconnected: ${reason}`));
+      this.setState('disconnected');
+    });
+
+    this.wsClient.on('error', (error: Error) => {
+      this.emit('error', error);
+    });
+
+    this.wsClient.on('close', () => {
+      if (!this.intentionalDisconnect) {
+        this.scheduleReconnect();
+      } else {
+        this.setState('disconnected');
+      }
+    });
+
+    await this.wsClient.connect();
+  }
+
   disconnect(): void {
+    this.intentionalDisconnect = true;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     this.wsClient?.disconnect();
     this.messageStream?.stop();
     for (const s of this.segmentStreams) s.stop();
@@ -81,6 +104,29 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
       this.state = state;
       this.emit('stateChange', state);
     }
+  }
+
+  private scheduleReconnect(): void {
+    if (this.reconnectCount >= this.maxRetries) {
+      this.emit('error', new Error(`Reconnection failed after ${this.maxRetries} attempts`));
+      this.setState('disconnected');
+      return;
+    }
+
+    this.reconnectCount++;
+    this.setState('connecting');
+
+    this.reconnectTimer = setTimeout(async () => {
+      this.reconnectTimer = null;
+      try {
+        const webSocketUrl = await this.fetchWebSocketUrl();
+        await this.connectWebSocket(webSocketUrl);
+        this.reconnectCount = 0;
+        this.setState('connected');
+      } catch {
+        this.scheduleReconnect();
+      }
+    }, this.retryIntervalMs);
   }
 
   /** 放送ページのHTMLからWebSocket URLを取得する */
@@ -173,7 +219,7 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
       const comment: Comment = {
         id: String(chat.no),
         content: chat.content,
-        userId: chat.hashedUserId || (chat.rawUserId ? String(chat.rawUserId) : ''),
+        userId: chat.hashedUserId || (chat.rawUserId ? String(chat.rawUserId) : undefined),
         timestamp: new Date(),
         platform: 'niconico',
         raw: chat,
