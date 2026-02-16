@@ -264,13 +264,6 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
       this.emit('operatorComment', operatorComment);
     });
 
-    segment.on('signal', (signal: string) => {
-      if (signal === 'flushed') {
-        this.emit('end');
-        this.disconnect();
-      }
-    });
-
     segment.on('error', (error: Error) => {
       this.emit('error', error);
     });

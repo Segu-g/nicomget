@@ -617,9 +617,6 @@ class SegmentStream extends EventEmitter {
         if (result.operatorComment) {
           this.emit("operatorComment", result.operatorComment);
         }
-        if (result.signal === "flushed") {
-          this.emit("signal", "flushed");
-        }
       } catch {
       }
     }
@@ -827,12 +824,6 @@ class NiconicoProvider extends EventEmitter {
         raw: nicoOp
       };
       this.emit("operatorComment", operatorComment);
-    });
-    segment.on("signal", (signal) => {
-      if (signal === "flushed") {
-        this.emit("end");
-        this.disconnect();
-      }
     });
     segment.on("error", (error) => {
       this.emit("error", error);

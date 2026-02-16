@@ -98,9 +98,6 @@ export class SegmentStream extends EventEmitter {
         if (result.operatorComment) {
           this.emit('operatorComment', result.operatorComment);
         }
-        if (result.signal === 'flushed') {
-          this.emit('signal', 'flushed');
-        }
       } catch {
         // malformed protobuf — skip
       }

@@ -130,7 +130,7 @@ describe('SegmentStream', () => {
     expect(comments[0].name).toBe('放送者');
   });
 
-  it('signalイベントを発火する', () => {
+  it('Signal.Flushedを無視する（セグメント境界マーカーであり放送終了ではない）', () => {
     const stream = new SegmentStream('https://example.com/seg', undefined);
     const signals: string[] = [];
     stream.on('signal', (signal: string) => signals.push(signal));
@@ -138,7 +138,6 @@ describe('SegmentStream', () => {
     const data = createFullSignalMessage(0);
     stream.handleData(data);
 
-    expect(signals).toHaveLength(1);
-    expect(signals[0]).toBe('flushed');
+    expect(signals).toHaveLength(0);
   });
 });
