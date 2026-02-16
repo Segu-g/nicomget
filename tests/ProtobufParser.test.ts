@@ -22,8 +22,8 @@ import {
   createGiftNicoliveMessage,
   createSimpleNotification,
   createSimpleNotificationNicoliveMessage,
-  createEmotionMessage,
-  createEmotionNicoliveMessage,
+  createSimpleNotificationV2,
+  createSimpleNotificationV2NicoliveMessage,
   createOperatorCommentState,
   createSignalMessage,
 } from './helpers/protobufTestData.js';
@@ -295,25 +295,85 @@ describe('parseChunkedMessage - SimpleNotification (emotion)', () => {
   });
 });
 
-describe('parseChunkedMessage - Emotion (field 23)', () => {
-  it('エモーションメッセージ (field 23) をパースできる', () => {
-    const emotion = createEmotionMessage('調子どう？');
-    const msg = createEmotionNicoliveMessage(emotion);
+describe('parseChunkedMessage - SimpleNotificationV2 (field 23)', () => {
+  it('type=EMOTION(2) のメッセージを emotions に返す', () => {
+    const notif = createSimpleNotificationV2(2, '調子どう？');
+    const msg = createSimpleNotificationV2NicoliveMessage(notif);
     const chunked = createChunkedMessage(msg);
 
     const result = parseChunkedMessage(chunked);
     expect(result.emotions).toHaveLength(1);
     expect(result.emotions[0].content).toBe('調子どう？');
+    expect(result.notifications).toHaveLength(0);
   });
 
-  it('絵文字エモーションをパースできる', () => {
-    const emotion = createEmotionMessage('🎉');
-    const msg = createEmotionNicoliveMessage(emotion);
+  it('type=EMOTION(2) の絵文字エモーションをパースできる', () => {
+    const notif = createSimpleNotificationV2(2, '🎉');
+    const msg = createSimpleNotificationV2NicoliveMessage(notif);
     const chunked = createChunkedMessage(msg);
 
     const result = parseChunkedMessage(chunked);
     expect(result.emotions).toHaveLength(1);
     expect(result.emotions[0].content).toBe('🎉');
+  });
+
+  it('type=PROGRAM_EXTENDED(4) のメッセージを notifications に返す', () => {
+    const notif = createSimpleNotificationV2(4, '延長されました');
+    const msg = createSimpleNotificationV2NicoliveMessage(notif);
+    const chunked = createChunkedMessage(msg);
+
+    const result = parseChunkedMessage(chunked);
+    expect(result.notifications).toHaveLength(1);
+    expect(result.notifications[0].type).toBe('program_extended');
+    expect(result.notifications[0].message).toBe('延長されました');
+    expect(result.emotions).toHaveLength(0);
+  });
+
+  it('type=RANKING_IN(5) のメッセージを notifications に返す', () => {
+    const notif = createSimpleNotificationV2(5, 'ランクインしました');
+    const msg = createSimpleNotificationV2NicoliveMessage(notif);
+    const chunked = createChunkedMessage(msg);
+
+    const result = parseChunkedMessage(chunked);
+    expect(result.notifications).toHaveLength(1);
+    expect(result.notifications[0].type).toBe('ranking_in');
+    expect(result.notifications[0].message).toBe('ランクインしました');
+  });
+
+  it('type=UNKNOWN(0) のメッセージを notifications に返す', () => {
+    const notif = createSimpleNotificationV2(0, '不明な通知');
+    const msg = createSimpleNotificationV2NicoliveMessage(notif);
+    const chunked = createChunkedMessage(msg);
+
+    const result = parseChunkedMessage(chunked);
+    expect(result.notifications).toHaveLength(1);
+    expect(result.notifications[0].type).toBe('unknown');
+    expect(result.notifications[0].message).toBe('不明な通知');
+    expect(result.emotions).toHaveLength(0);
+  });
+
+  it('全NotificationTypeを正しくマッピングする', () => {
+    const typeMap: [number, string][] = [
+      [0, 'unknown'],
+      [1, 'ichiba'],
+      [3, 'cruise'],
+      [4, 'program_extended'],
+      [5, 'ranking_in'],
+      [6, 'visited'],
+      [7, 'supporter_registered'],
+      [8, 'user_level_up'],
+      [9, 'user_follow'],
+    ];
+
+    for (const [typeNum, typeName] of typeMap) {
+      const notif = createSimpleNotificationV2(typeNum, `test-${typeName}`);
+      const msg = createSimpleNotificationV2NicoliveMessage(notif);
+      const chunked = createChunkedMessage(msg);
+
+      const result = parseChunkedMessage(chunked);
+      expect(result.notifications).toHaveLength(1);
+      expect(result.notifications[0].type).toBe(typeName);
+    }
   });
 });
 

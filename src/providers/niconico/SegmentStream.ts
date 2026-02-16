@@ -5,6 +5,7 @@ import {
   type NicoChat,
   type NicoGift,
   type NicoEmotion,
+  type NicoNotification,
   type NicoOperatorComment,
 } from './ProtobufParser.js';
 
@@ -94,6 +95,9 @@ export class SegmentStream extends EventEmitter {
         }
         for (const emotion of result.emotions) {
           this.emit('emotion', emotion);
+        }
+        for (const notification of result.notifications) {
+          this.emit('notification', notification);
         }
         if (result.operatorComment) {
           this.emit('operatorComment', result.operatorComment);

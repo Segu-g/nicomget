@@ -180,7 +180,7 @@ function parseReadyForNext(data) {
 }
 function parseChunkedMessage(data) {
   const reader = new Reader(data);
-  const result = { chats: [], gifts: [], emotions: [] };
+  const result = { chats: [], gifts: [], emotions: [], notifications: [] };
   while (reader.pos < reader.len) {
     const tag = reader.uint32();
     const field = tag >>> 3;
@@ -194,6 +194,7 @@ function parseChunkedMessage(data) {
         if (msg.chat) result.chats.push(msg.chat);
         if (msg.gift) result.gifts.push(msg.gift);
         if (msg.emotion) result.emotions.push(msg.emotion);
+        if (msg.notification) result.notifications.push(msg.notification);
       }
     } else if (field === 4 && wireType === 2) {
       const len = reader.uint32();
@@ -234,11 +235,7 @@ function parseNicoliveMessage(data) {
         case 8:
           return { gift: parseGift(subData) };
         case 23:
-          {
-            const emotion = parseEmotionMessage(subData);
-            if (emotion) return { emotion };
-          }
-          break;
+          return parseSimpleNotificationV2(subData);
       }
     } else {
       reader.skipType(wireType);
@@ -317,18 +314,51 @@ function parseSimpleNotification(data) {
   }
   return null;
 }
-function parseEmotionMessage(data) {
+const NOTIFICATION_TYPE_MAP = {
+  0: "unknown",
+  1: "ichiba",
+  // 2 = EMOTION → emotion として返すため含まない
+  3: "cruise",
+  4: "program_extended",
+  5: "ranking_in",
+  6: "visited",
+  7: "supporter_registered",
+  8: "user_level_up",
+  9: "user_follow"
+};
+function parseSimpleNotificationV2(data) {
   const reader = new Reader(data);
+  let type = 0;
+  let message = "";
   while (reader.pos < reader.len) {
     const tag = reader.uint32();
     const field = tag >>> 3;
     const wireType = tag & 7;
-    if (field === 2 && wireType === 2) {
-      return { content: reader.string() };
+    switch (field) {
+      case 1:
+        if (wireType === 0) {
+          type = reader.int32();
+        } else {
+          reader.skipType(wireType);
+        }
+        break;
+      case 2:
+        if (wireType === 2) {
+          message = reader.string();
+        } else {
+          reader.skipType(wireType);
+        }
+        break;
+      default:
+        reader.skipType(wireType);
+        break;
     }
-    reader.skipType(wireType);
   }
-  return null;
+  if (type === 2) {
+    return { emotion: { content: message } };
+  }
+  const typeName = NOTIFICATION_TYPE_MAP[type] ?? "unknown";
+  return { notification: { type: typeName, message } };
 }
 function parseGift(data) {
   const reader = new Reader(data);
@@ -633,6 +663,9 @@ class SegmentStream extends EventEmitter {
         for (const emotion of result.emotions) {
           this.emit("emotion", emotion);
         }
+        for (const notification of result.notifications) {
+          this.emit("notification", notification);
+        }
         if (result.operatorComment) {
           this.emit("operatorComment", result.operatorComment);
         }
@@ -832,6 +865,16 @@ class NiconicoProvider extends EventEmitter {
         raw: nicoEmotion
       };
       this.emit("emotion", emotion);
+    });
+    segment.on("notification", (nicoNotif) => {
+      const notification = {
+        type: nicoNotif.type,
+        message: nicoNotif.message,
+        timestamp: /* @__PURE__ */ new Date(),
+        platform: "niconico",
+        raw: nicoNotif
+      };
+      this.emit("notification", notification);
     });
     segment.on("operatorComment", (nicoOp) => {
       const operatorComment = {

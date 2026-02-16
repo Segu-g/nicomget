@@ -2,16 +2,22 @@ import protobuf from 'protobufjs/minimal.js';
 const { Reader } = protobuf;
 
 /**
- * Proto定義 (nicolive-comment-protobuf):
+ * Proto定義 (n-air-app/nicolive-comment-protobuf v2025.1117.170000):
  *   ChunkedEntry { oneof: segment=1(MessageSegment), backward=2, previous=3, next=4(ReadyForNext) }
  *   MessageSegment { from=1(Timestamp), until=2(Timestamp), uri=3(string) }
  *   ReadyForNext { at=1(int64) }
- *   ChunkedMessage { meta=1(Meta), message=2(NicoliveMessage), state=4(NicoliveState), signal=5(Signal) }
- *   NicoliveMessage { oneof: chat=1(Chat), simple_notification=7(SimpleNotification), gift=8(Gift), nicoad=9(Nicoad), overflow_chat=20(Chat), emotion=23(Emotion) }
+ *   ChunkedMessage { meta=1(Meta), oneof payload: message=2(NicoliveMessage), state=4(NicoliveState), signal=5(Signal) }
+ *   NicoliveMessage { oneof data: chat=1, simple_notification=7, gift=8, nicoad=9,
+ *     tag_updated=17, moderator_updated=18, ssng_updated=19, overflowed_chat=20,
+ *     forwarded_chat=22, simple_notification_v2=23, akashic_message_event=24 }
  *   Chat { content=1, name=2, vpos=3, account_status=4, raw_user_id=5, hashed_user_id=6, modifier=7, no=8 }
- *   SimpleNotification { oneof: emotion=3(string) }
+ *   SimpleNotification { emotion=3(string), program_extension=5(string) }
+ *   SimpleNotificationV2 { type=1(NotificationType), message=2(string), show_in_telop=3(bool), show_in_list=4(bool) }
+ *   NotificationType { UNKNOWN=0, ICHIBA=1, EMOTION=2, CRUISE=3, PROGRAM_EXTENDED=4,
+ *     RANKING_IN=5, VISITED=6, SUPPORTER_REGISTERED=7, USER_LEVEL_UP=8, USER_FOLLOW=9 }
  *   Gift { item_id=1, advertiser_user_id=2, advertiser_name=3, point=4, message=5, item_name=6, contribution_rank=7 }
- *   NicoliveState { marquee=4(Marquee) }
+ *   NicoliveState { statistics=1, enquete=2, move_order=3, marquee=4(Marquee), comment_lock=5,
+ *     comment_mode=6, trial_panel=7, program_status=9, ... }
  *   Marquee { display=1(Display) }
  *   Display { operator_comment=1(OperatorComment) }
  *   OperatorComment { content=1, name=2, modifier=3, link=4 }
@@ -39,9 +45,27 @@ export interface NicoGift {
   contributionRank?: number;
 }
 
-/** ニコニコ固有のエモーション */
+/** ニコニコ固有のエモーション (SimpleNotificationV2 type=EMOTION) */
 export interface NicoEmotion {
   content: string;
+}
+
+/** SimpleNotificationV2 の通知タイプ (EMOTION 以外) */
+export type NicoNotificationType =
+  | 'unknown'
+  | 'ichiba'
+  | 'cruise'
+  | 'program_extended'
+  | 'ranking_in'
+  | 'visited'
+  | 'supporter_registered'
+  | 'user_level_up'
+  | 'user_follow';
+
+/** ニコニコ固有の通知 (SimpleNotificationV2 type!=EMOTION) */
+export interface NicoNotification {
+  type: NicoNotificationType;
+  message: string;
 }
 
 /** ニコニコ固有の放送者コメント */
@@ -62,6 +86,7 @@ export interface ChunkedMessageResult {
   chats: NicoChat[];
   gifts: NicoGift[];
   emotions: NicoEmotion[];
+  notifications: NicoNotification[];
   operatorComment?: NicoOperatorComment;
   signal?: 'flushed';
 }
@@ -200,7 +225,7 @@ function parseReadyForNext(data: Uint8Array): string | undefined {
  */
 export function parseChunkedMessage(data: Uint8Array): ChunkedMessageResult {
   const reader = new Reader(data);
-  const result: ChunkedMessageResult = { chats: [], gifts: [], emotions: [] };
+  const result: ChunkedMessageResult = { chats: [], gifts: [], emotions: [], notifications: [] };
 
   while (reader.pos < reader.len) {
     const tag = reader.uint32();
@@ -217,6 +242,7 @@ export function parseChunkedMessage(data: Uint8Array): ChunkedMessageResult {
         if (msg.chat) result.chats.push(msg.chat);
         if (msg.gift) result.gifts.push(msg.gift);
         if (msg.emotion) result.emotions.push(msg.emotion);
+        if (msg.notification) result.notifications.push(msg.notification);
       }
     } else if (field === 4 && wireType === 2) {
       // state (NicoliveState)
@@ -242,16 +268,14 @@ interface NicoliveMessageResult {
   chat?: NicoChat;
   gift?: NicoGift;
   emotion?: NicoEmotion;
+  notification?: NicoNotification;
 }
 
 /**
  * NicoliveMessage: oneof data
  *   chat=1(Chat), simple_notification=7(SimpleNotification),
  *   gift=8(Gift), nicoad=9(Nicoad), overflow_chat=20(Chat),
- *   emotion=23(Emotion)
- *
- * ※ field 23 は NDGRClient の proto 定義には未記載だが、
- *   実サーバーから送信されるエモーションメッセージ。
+ *   simple_notification_v2=23(SimpleNotificationV2)
  */
 function parseNicoliveMessage(data: Uint8Array): NicoliveMessageResult | null {
   const reader = new Reader(data);
@@ -278,12 +302,8 @@ function parseNicoliveMessage(data: Uint8Array): NicoliveMessageResult | null {
           break;
         case 8: // gift (Gift)
           return { gift: parseGift(subData) };
-        case 23: // emotion (実サーバー確認済み: f1=type, f2=content, f4=flag)
-          {
-            const emotion = parseEmotionMessage(subData);
-            if (emotion) return { emotion };
-          }
-          break;
+        case 23: // simple_notification_v2 (SimpleNotificationV2)
+          return parseSimpleNotificationV2(subData);
       }
     } else {
       reader.skipType(wireType);
@@ -387,25 +407,65 @@ function parseSimpleNotification(data: Uint8Array): NicoEmotion | null {
   return null;
 }
 
+/** NotificationType enum → NicoNotificationType 文字列マッピング */
+const NOTIFICATION_TYPE_MAP: Record<number, NicoNotificationType> = {
+  0: 'unknown',
+  1: 'ichiba',
+  // 2 = EMOTION → emotion として返すため含まない
+  3: 'cruise',
+  4: 'program_extended',
+  5: 'ranking_in',
+  6: 'visited',
+  7: 'supporter_registered',
+  8: 'user_level_up',
+  9: 'user_follow',
+};
+
 /**
- * Emotion (field 23): f1=type(varint), f2=content(string), f4=flag(varint)
- * ※ NDGRClient proto未記載。実サーバーで確認済み。
+ * SimpleNotificationV2 (field 23):
+ *   type=1(NotificationType), message=2(string), show_in_telop=3(bool), show_in_list=4(bool)
+ *
+ * type=EMOTION(2) → { emotion } を返す
+ * その他 → { notification } を返す
  */
-function parseEmotionMessage(data: Uint8Array): NicoEmotion | null {
+function parseSimpleNotificationV2(data: Uint8Array): NicoliveMessageResult | null {
   const reader = new Reader(data);
+  let type = 0;
+  let message = '';
 
   while (reader.pos < reader.len) {
     const tag = reader.uint32();
     const field = tag >>> 3;
     const wireType = tag & 7;
 
-    if (field === 2 && wireType === 2) {
-      return { content: reader.string() };
+    switch (field) {
+      case 1: // type (NotificationType enum)
+        if (wireType === 0) {
+          type = reader.int32();
+        } else {
+          reader.skipType(wireType);
+        }
+        break;
+      case 2: // message (string)
+        if (wireType === 2) {
+          message = reader.string();
+        } else {
+          reader.skipType(wireType);
+        }
+        break;
+      default:
+        reader.skipType(wireType);
+        break;
     }
-    reader.skipType(wireType);
   }
 
-  return null;
+  if (type === 2) {
+    // EMOTION
+    return { emotion: { content: message } };
+  }
+
+  const typeName = NOTIFICATION_TYPE_MAP[type] ?? 'unknown';
+  return { notification: { type: typeName, message } };
 }
 
 /**

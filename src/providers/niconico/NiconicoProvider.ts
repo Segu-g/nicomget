@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
 import type { ICommentProvider } from '../../interfaces/ICommentProvider.js';
-import type { Comment, ConnectionState, Gift, Emotion, OperatorComment } from '../../interfaces/types.js';
-import type { NicoChat, NicoGift, NicoEmotion, NicoOperatorComment } from './ProtobufParser.js';
+import type { Comment, ConnectionState, Gift, Emotion, Notification, OperatorComment } from '../../interfaces/types.js';
+import type { NicoChat, NicoGift, NicoEmotion, NicoNotification, NicoOperatorComment } from './ProtobufParser.js';
 import { WebSocketClient } from './WebSocketClient.js';
 import { MessageStream } from './MessageStream.js';
 import { SegmentStream } from './SegmentStream.js';
@@ -250,6 +250,17 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
         raw: nicoEmotion,
       };
       this.emit('emotion', emotion);
+    });
+
+    segment.on('notification', (nicoNotif: NicoNotification) => {
+      const notification: Notification = {
+        type: nicoNotif.type,
+        message: nicoNotif.message,
+        timestamp: new Date(),
+        platform: 'niconico',
+        raw: nicoNotif,
+      };
+      this.emit('notification', notification);
     });
 
     segment.on('operatorComment', (nicoOp: NicoOperatorComment) => {

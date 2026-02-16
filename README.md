@@ -7,10 +7,10 @@
 ## Features
 
 - ニコニコ生放送のコメントをリアルタイム取得
-- ギフト・エモーション・放送者コメントの取得
+- ギフト・エモーション・各種通知・放送者コメントの取得
 - WebSocket 切断時の自動再接続（リトライ回数・間隔を設定可能）
 - TypeScript / ESM 対応
-- イベントベース API（`comment`, `gift`, `emotion`, `operatorComment`, `stateChange`, `error`）
+- イベントベース API（`comment`, `gift`, `emotion`, `notification`, `operatorComment`, `stateChange`, `error`）
 
 ## Install
 
@@ -37,6 +37,10 @@ provider.on('gift', (gift) => {
 
 provider.on('emotion', (emotion) => {
   console.log(`Emotion: ${emotion.id}`);
+});
+
+provider.on('notification', (notification) => {
+  console.log(`Notification [${notification.type}]: ${notification.message}`);
 });
 
 provider.on('operatorComment', (op) => {
@@ -72,6 +76,7 @@ const provider = new NiconicoProvider({
 | `comment` | `Comment` | コメントを受信した |
 | `gift` | `Gift` | ギフトを受信した |
 | `emotion` | `Emotion` | エモーションを受信した |
+| `notification` | `Notification` | 通知を受信した（延長・ランクイン等） |
 | `operatorComment` | `OperatorComment` | 放送者コメントを受信した |
 | `stateChange` | `ConnectionState` | 接続状態が変化した |
 | `error` | `Error` | エラーが発生した |
@@ -105,6 +110,14 @@ interface Emotion {
   timestamp: Date;     // 受信日時
   platform: string;    // "niconico"
   raw: unknown;        // プラットフォーム固有の生データ (NicoEmotion)
+}
+
+interface Notification {
+  type: string;          // 通知タイプ ("ichiba" | "cruise" | "program_extended" | ...)
+  message: string;       // メッセージ本文
+  timestamp: Date;       // 受信日時
+  platform: string;      // "niconico"
+  raw: unknown;          // プラットフォーム固有の生データ (NicoNotification)
 }
 
 interface OperatorComment {

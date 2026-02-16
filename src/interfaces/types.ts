@@ -64,5 +64,19 @@ export interface OperatorComment {
   raw: unknown;
 }
 
+/** 通知 (SimpleNotificationV2 の EMOTION 以外) */
+export interface Notification {
+  /** 通知タイプ */
+  type: string;
+  /** メッセージ本文 */
+  message: string;
+  /** 受信日時 */
+  timestamp: Date;
+  /** プラットフォーム名 */
+  platform: string;
+  /** プラットフォーム固有の生データ */
+  raw: unknown;
+}
+
 /** 接続状態 */
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error';

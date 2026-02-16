@@ -152,23 +152,28 @@ export function createNextEntry(at: number): Uint8Array {
 
 // --- 新メッセージタイプのヘルパー ---
 
-/** Emotion メッセージ (field 23) を生成: f1=type, f2=content, f4=flag */
-export function createEmotionMessage(content: string, type: number = 2): Uint8Array {
+/**
+ * SimpleNotificationV2 メッセージ (field 23) を生成
+ * Proto: { type=1(NotificationType), message=2(string), show_in_telop=3(bool), show_in_list=4(bool) }
+ * NotificationType: UNKNOWN=0, ICHIBA=1, EMOTION=2, CRUISE=3, PROGRAM_EXTENDED=4,
+ *   RANKING_IN=5, VISITED=6, SUPPORTER_REGISTERED=7, USER_LEVEL_UP=8, USER_FOLLOW=9
+ */
+export function createSimpleNotificationV2(type: number, message: string): Uint8Array {
   const writer = new Writer();
   writer.uint32((1 << 3) | 0); // field 1 (type), varint
   writer.int32(type);
-  writer.uint32((2 << 3) | 2); // field 2 (content), length-delimited
-  writer.string(content);
-  writer.uint32((4 << 3) | 0); // field 4 (flag), varint
+  writer.uint32((2 << 3) | 2); // field 2 (message), length-delimited
+  writer.string(message);
+  writer.uint32((4 << 3) | 0); // field 4 (show_in_list), varint
   writer.int32(1);
   return writer.finish();
 }
 
-/** NicoliveMessageでEmotionをラップ (field 23) */
-export function createEmotionNicoliveMessage(emotion: Uint8Array): Uint8Array {
+/** NicoliveMessageでSimpleNotificationV2をラップ (field 23) */
+export function createSimpleNotificationV2NicoliveMessage(notification: Uint8Array): Uint8Array {
   const writer = new Writer();
   writer.uint32((23 << 3) | 2); // field 23, length-delimited
-  writer.bytes(emotion);
+  writer.bytes(notification);
   return writer.finish();
 }
 
@@ -322,10 +327,18 @@ export function createFullGiftMessage(options: {
   return encodeLengthDelimited(chunkedMessage);
 }
 
-/** 完全なエモーションメッセージ (Length-Delimited) を生成 */
+/** 完全なエモーションメッセージ (Length-Delimited) を生成 (type=EMOTION=2) */
 export function createFullEmotionMessage(emotion: string): Uint8Array {
-  const emotionMsg = createEmotionMessage(emotion);
-  const nicoliveMessage = createEmotionNicoliveMessage(emotionMsg);
+  const notifMsg = createSimpleNotificationV2(2, emotion); // type=2 is EMOTION
+  const nicoliveMessage = createSimpleNotificationV2NicoliveMessage(notifMsg);
+  const chunkedMessage = createChunkedMessage(nicoliveMessage);
+  return encodeLengthDelimited(chunkedMessage);
+}
+
+/** 完全な通知メッセージ (Length-Delimited) を生成 (type != EMOTION) */
+export function createFullNotificationMessage(type: number, message: string): Uint8Array {
+  const notifMsg = createSimpleNotificationV2(type, message);
+  const nicoliveMessage = createSimpleNotificationV2NicoliveMessage(notifMsg);
   const chunkedMessage = createChunkedMessage(nicoliveMessage);
   return encodeLengthDelimited(chunkedMessage);
 }

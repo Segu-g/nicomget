@@ -4,12 +4,14 @@ import type {
   NicoChat,
   NicoGift,
   NicoEmotion,
+  NicoNotification,
   NicoOperatorComment,
 } from '../src/providers/niconico/ProtobufParser.js';
 import {
   createFullCommentMessage,
   createFullGiftMessage,
   createFullEmotionMessage,
+  createFullNotificationMessage,
   createFullOperatorCommentMessage,
   createFullSignalMessage,
 } from './helpers/protobufTestData.js';
@@ -128,6 +130,34 @@ describe('SegmentStream', () => {
     expect(comments).toHaveLength(1);
     expect(comments[0].content).toBe('放送者からのお知らせ');
     expect(comments[0].name).toBe('放送者');
+  });
+
+  it('notificationイベントを発火する（type != EMOTION）', () => {
+    const stream = new SegmentStream('https://example.com/seg', undefined);
+    const notifications: NicoNotification[] = [];
+    stream.on('notification', (n: NicoNotification) => notifications.push(n));
+
+    const data = createFullNotificationMessage(4, '延長されました');
+    stream.handleData(data);
+
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0].type).toBe('program_extended');
+    expect(notifications[0].message).toBe('延長されました');
+  });
+
+  it('type=EMOTIONはemotionイベントとして発火しnotificationには含まれない', () => {
+    const stream = new SegmentStream('https://example.com/seg', undefined);
+    const emotions: NicoEmotion[] = [];
+    const notifications: NicoNotification[] = [];
+    stream.on('emotion', (e: NicoEmotion) => emotions.push(e));
+    stream.on('notification', (n: NicoNotification) => notifications.push(n));
+
+    const data = createFullEmotionMessage('🎉');
+    stream.handleData(data);
+
+    expect(emotions).toHaveLength(1);
+    expect(emotions[0].content).toBe('🎉');
+    expect(notifications).toHaveLength(0);
   });
 
   it('Signal.Flushedを無視する（セグメント境界マーカーであり放送終了ではない）', () => {

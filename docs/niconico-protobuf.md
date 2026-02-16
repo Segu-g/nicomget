@@ -4,10 +4,9 @@
 
 ## 参照元
 
-- proto 定義: [n-air-app/nicolive-comment-protobuf](https://github.com/n-air-app/nicolive-comment-protobuf)
+- proto 定義: [n-air-app/nicolive-comment-protobuf](https://github.com/n-air-app/nicolive-comment-protobuf) (v2025.1117.170000)
 - 参考実装: [tsukumijima/NDGRClient](https://github.com/tsukumijima/NDGRClient)
-
-> **注意**: 実サーバーは proto 定義にないフィールドを送信することがある（後述の Emotion field 23）。
+- 参考記事: [ニコニコ生放送コメントサーバー接続ガイド (Qiita)](https://qiita.com/DaisukeDaisuke/items/3938f245caec1e99d51e)
 
 ## 接続フロー
 
@@ -25,7 +24,7 @@ WebSocket (wss://a.live2.nicovideo.jp/...)
 
 セグメントサーバー (HTTP streaming, segment URI)
   → ChunkedMessage のストリーム
-  → Chat / Gift / Emotion / OperatorComment を取得
+  → Chat / Gift / Notification / OperatorComment を取得
 ```
 
 ## ChunkedEntry (メッセージサーバー)
@@ -72,12 +71,10 @@ WebSocket (wss://a.live2.nicovideo.jp/...)
 
 ## NicoliveMessage (oneof data)
 
-proto 定義 (n-air-app) のフィールド:
-
 | Field | Type | 説明 | 対応状況 |
 |-------|------|------|---------|
 | 1 | Chat | 一般コメント | 対応済み |
-| 7 | SimpleNotification | 通知 | 対応済み（後方互換） |
+| 7 | SimpleNotification | 通知（旧形式） | 対応済み（後方互換） |
 | 8 | Gift | ギフト | 対応済み |
 | 9 | Nicoad | ニコニ広告 | 未対応 |
 | 13 | GameUpdate | ゲーム更新 | 未対応 |
@@ -85,14 +82,11 @@ proto 定義 (n-air-app) のフィールド:
 | 18 | ModeratorUpdated | モデレーター更新 | 未対応 |
 | 19 | SSNGUpdated | SSNG更新 | 未対応 |
 | 20 | Chat | あふれコメント | 対応済み |
+| 22 | ForwardedChat | クルーズ/コラボ転送コメント | 未対応 |
+| **23** | **SimpleNotificationV2** | **各種通知（エモーション含む）** | **対応済み** |
+| 24 | AkashicMessageEvent | ゲームイベント | 未対応 |
 
-実サーバーで確認された追加フィールド:
-
-| Field | Type | 説明 | 対応状況 |
-|-------|------|------|---------|
-| **23** | Emotion | **エモーション** | **対応済み** |
-
-> **重要**: Emotion は proto 定義の `SimpleNotification.emotion` (field 7 → sub-field 3) ではなく、**NicoliveMessage field 23** で送信される。これは NDGRClient の proto 定義には記載されていない。実放送（lv349897488）で確認済み。
+> reserved fields: 2-6, 10-12, 14-16, 21
 
 ### Chat
 
@@ -119,14 +113,31 @@ proto 定義 (n-air-app) のフィールド:
 | 6 | LD | string | アイテム名 |
 | 7 | varint | int32 | 貢献ランク（任意） |
 
-### Emotion (field 23, proto 未記載)
+### SimpleNotificationV2 (field 23)
 
 | Field | Wire Type | Type | 説明 |
 |-------|-----------|------|------|
-| 1 | varint | int32 | 種別（2=エモーション, 1=ゲーム通知等） |
-| 2 | LD | string | **内容文字列**（例: 「調子どう？」） |
-| 3 | varint | int32 | 不明フラグ（任意） |
-| 4 | varint | int32 | 不明フラグ |
+| 1 | varint | NotificationType | 通知種別 |
+| 2 | LD | string | メッセージ本文 |
+| 3 | varint | bool | テロップ表示フラグ |
+| 4 | varint | bool | リスト表示フラグ |
+
+#### NotificationType enum
+
+| Value | Name | 説明 | ライブラリの処理 |
+|-------|------|------|----------------|
+| 0 | UNKNOWN | 不明 | notification イベント |
+| 1 | ICHIBA | 市場 | notification イベント |
+| 2 | **EMOTION** | **エモーション** | **emotion イベント** |
+| 3 | CRUISE | クルーズ | notification イベント |
+| 4 | PROGRAM_EXTENDED | 延長 | notification イベント |
+| 5 | RANKING_IN | ランクイン | notification イベント |
+| 6 | VISITED | 来場 | notification イベント |
+| 7 | SUPPORTER_REGISTERED | サポーター登録 | notification イベント |
+| 8 | USER_LEVEL_UP | レベルアップ | notification イベント |
+| 9 | USER_FOLLOW | フォロー | notification イベント |
+
+> type=EMOTION(2) のみ `emotion` イベントとして発火し、それ以外は `notification` イベントとして発火する。
 
 ### SimpleNotification (field 7, 旧形式)
 
@@ -136,6 +147,15 @@ proto 定義 (n-air-app) のフィールド:
 | 5 | LD | string | 延長通知 |
 
 > 実サーバーでは field 7 経由のエモーション送信は確認されていない。後方互換のためパーサーは維持。
+
+### ForwardedChat (field 22, 未対応)
+
+| Field | Wire Type | Type | 説明 |
+|-------|-----------|------|------|
+| 1 | LD | Chat | チャット本体 |
+| 2 | LD | string | メッセージID |
+| 3 | varint | int64 | 元の放送ID |
+| 4 | varint | ForwardingMode | 転送モード (UNKNOWN=0, FROM_CRUISE=1, COLLAB_SHARING=2) |
 
 ## NicoliveState (放送者コメント経路)
 
@@ -158,12 +178,22 @@ ChunkedMessage.state (field 4)
 | 3 | LD | Modifier | 修飾子 |
 | 4 | LD | string | リンクURL（任意） |
 
-### NicoliveState のその他フィールド
+### NicoliveState の全フィールド
 
-| Field | Wire Type | 説明 |
-|-------|-----------|------|
-| 1 | LD | 統計情報？（sub-field 1=varint, 2=varint が確認されている） |
-| 4 | LD | Marquee（放送者コメント） |
+| Field | Type | 説明 | 対応状況 |
+|-------|------|------|---------|
+| 1 | Statistics | 統計情報 | 未対応 |
+| 2 | Enquete | アンケート | 未対応 |
+| 3 | MoveOrder | 移動命令 | 未対応 |
+| 4 | Marquee | 放送者コメント | 対応済み |
+| 5 | CommentLock | コメントロック | 未対応 |
+| 6 | CommentMode | コメントモード | 未対応 |
+| 7 | TrialPanel | トライアルパネル | 未対応 |
+| 9 | ProgramStatus | 番組ステータス | 未対応 |
+| 10 | ModerationAnnouncement | モデレーション通知 | 未対応 |
+| 11 | IchibaLauncherItemSet | 市場 | 未対応 |
+| 12 | StreamStateChange | ストリーム状態変化 | 未対応 |
+| 13 | AkashicStateRouting | ゲーム状態 | 未対応 |
 
 ## 実放送での検証結果 (lv349897488)
 
@@ -171,7 +201,7 @@ ChunkedMessage.state (field 4)
 |---------------|---------|------|
 | Chat (field 1) | 確認済み | 通常コメント |
 | OperatorComment (state field 4) | 確認済み | 放送者コメント |
-| Emotion (field 23) | 確認済み | 「調子どう？」等 |
+| SimpleNotificationV2 type=EMOTION (field 23) | 確認済み | 「調子どう？」等 |
 | Overflow Chat (field 20) | 未確認 | ユニットテストのみ |
 | Gift (field 8) | 未確認 | ユニットテストのみ |
 | Signal.Flushed (signal field 5) | 確認済み | セグメント冒頭に毎回送信される |
@@ -180,7 +210,7 @@ ChunkedMessage.state (field 4)
 
 `scripts/debug/` に調査用スクリプトがある:
 
-- `dump-messages.ts` — 全イベント（Chat/Gift/Emotion/OperatorComment）をコンソールに表示
+- `dump-messages.ts` — 全イベント（Chat/Gift/Emotion/Notification/OperatorComment）をコンソールに表示
 - `dump-debug.ts` — ChunkedMessage の生 protobuf フィールドをダンプ（未知フィールドの調査用）
 - `dump-raw.ts` — WebSocket → メッセージストリーム → セグメントの各段階の生データをダンプ
 
