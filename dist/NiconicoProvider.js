@@ -233,6 +233,12 @@ function parseNicoliveMessage(data) {
           break;
         case 8:
           return { gift: parseGift(subData) };
+        case 23:
+          {
+            const emotion = parseEmotionMessage(subData);
+            if (emotion) return { emotion };
+          }
+          break;
       }
     } else {
       reader.skipType(wireType);
@@ -305,6 +311,19 @@ function parseSimpleNotification(data) {
     const field = tag >>> 3;
     const wireType = tag & 7;
     if (field === 3 && wireType === 2) {
+      return { content: reader.string() };
+    }
+    reader.skipType(wireType);
+  }
+  return null;
+}
+function parseEmotionMessage(data) {
+  const reader = new Reader(data);
+  while (reader.pos < reader.len) {
+    const tag = reader.uint32();
+    const field = tag >>> 3;
+    const wireType = tag & 7;
+    if (field === 2 && wireType === 2) {
       return { content: reader.string() };
     }
     reader.skipType(wireType);

@@ -127,7 +127,7 @@ declare class NiconicoProvider extends EventEmitter implements ICommentProvider 
  *   MessageSegment { from=1(Timestamp), until=2(Timestamp), uri=3(string) }
  *   ReadyForNext { at=1(int64) }
  *   ChunkedMessage { meta=1(Meta), message=2(NicoliveMessage), state=4(NicoliveState), signal=5(Signal) }
- *   NicoliveMessage { oneof: chat=1(Chat), simple_notification=7(SimpleNotification), gift=8(Gift), nicoad=9(Nicoad), overflow_chat=20(Chat) }
+ *   NicoliveMessage { oneof: chat=1(Chat), simple_notification=7(SimpleNotification), gift=8(Gift), nicoad=9(Nicoad), overflow_chat=20(Chat), emotion=23(Emotion) }
  *   Chat { content=1, name=2, vpos=3, account_status=4, raw_user_id=5, hashed_user_id=6, modifier=7, no=8 }
  *   SimpleNotification { oneof: emotion=3(string) }
  *   Gift { item_id=1, advertiser_user_id=2, advertiser_name=3, point=4, message=5, item_name=6, contribution_rank=7 }

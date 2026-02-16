@@ -22,6 +22,8 @@ import {
   createGiftNicoliveMessage,
   createSimpleNotification,
   createSimpleNotificationNicoliveMessage,
+  createEmotionMessage,
+  createEmotionNicoliveMessage,
   createOperatorCommentState,
   createSignalMessage,
 } from './helpers/protobufTestData.js';
@@ -290,6 +292,28 @@ describe('parseChunkedMessage - SimpleNotification (emotion)', () => {
     const result = parseChunkedMessage(chunked);
     expect(result.emotions).toHaveLength(1);
     expect(result.emotions[0].content).toBe('わこつ');
+  });
+});
+
+describe('parseChunkedMessage - Emotion (field 23)', () => {
+  it('エモーションメッセージ (field 23) をパースできる', () => {
+    const emotion = createEmotionMessage('調子どう？');
+    const msg = createEmotionNicoliveMessage(emotion);
+    const chunked = createChunkedMessage(msg);
+
+    const result = parseChunkedMessage(chunked);
+    expect(result.emotions).toHaveLength(1);
+    expect(result.emotions[0].content).toBe('調子どう？');
+  });
+
+  it('絵文字エモーションをパースできる', () => {
+    const emotion = createEmotionMessage('🎉');
+    const msg = createEmotionNicoliveMessage(emotion);
+    const chunked = createChunkedMessage(msg);
+
+    const result = parseChunkedMessage(chunked);
+    expect(result.emotions).toHaveLength(1);
+    expect(result.emotions[0].content).toBe('🎉');
   });
 });
 

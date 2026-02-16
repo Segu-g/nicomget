@@ -7,7 +7,7 @@ const { Reader } = protobuf;
  *   MessageSegment { from=1(Timestamp), until=2(Timestamp), uri=3(string) }
  *   ReadyForNext { at=1(int64) }
  *   ChunkedMessage { meta=1(Meta), message=2(NicoliveMessage), state=4(NicoliveState), signal=5(Signal) }
- *   NicoliveMessage { oneof: chat=1(Chat), simple_notification=7(SimpleNotification), gift=8(Gift), nicoad=9(Nicoad), overflow_chat=20(Chat) }
+ *   NicoliveMessage { oneof: chat=1(Chat), simple_notification=7(SimpleNotification), gift=8(Gift), nicoad=9(Nicoad), overflow_chat=20(Chat), emotion=23(Emotion) }
  *   Chat { content=1, name=2, vpos=3, account_status=4, raw_user_id=5, hashed_user_id=6, modifier=7, no=8 }
  *   SimpleNotification { oneof: emotion=3(string) }
  *   Gift { item_id=1, advertiser_user_id=2, advertiser_name=3, point=4, message=5, item_name=6, contribution_rank=7 }
@@ -247,7 +247,11 @@ interface NicoliveMessageResult {
 /**
  * NicoliveMessage: oneof data
  *   chat=1(Chat), simple_notification=7(SimpleNotification),
- *   gift=8(Gift), nicoad=9(Nicoad), overflow_chat=20(Chat)
+ *   gift=8(Gift), nicoad=9(Nicoad), overflow_chat=20(Chat),
+ *   emotion=23(Emotion)
+ *
+ * ※ field 23 は NDGRClient の proto 定義には未記載だが、
+ *   実サーバーから送信されるエモーションメッセージ。
  */
 function parseNicoliveMessage(data: Uint8Array): NicoliveMessageResult | null {
   const reader = new Reader(data);
@@ -274,6 +278,12 @@ function parseNicoliveMessage(data: Uint8Array): NicoliveMessageResult | null {
           break;
         case 8: // gift (Gift)
           return { gift: parseGift(subData) };
+        case 23: // emotion (実サーバー確認済み: f1=type, f2=content, f4=flag)
+          {
+            const emotion = parseEmotionMessage(subData);
+            if (emotion) return { emotion };
+          }
+          break;
       }
     } else {
       reader.skipType(wireType);
@@ -369,6 +379,27 @@ function parseSimpleNotification(data: Uint8Array): NicoEmotion | null {
     const wireType = tag & 7;
 
     if (field === 3 && wireType === 2) {
+      return { content: reader.string() };
+    }
+    reader.skipType(wireType);
+  }
+
+  return null;
+}
+
+/**
+ * Emotion (field 23): f1=type(varint), f2=content(string), f4=flag(varint)
+ * ※ NDGRClient proto未記載。実サーバーで確認済み。
+ */
+function parseEmotionMessage(data: Uint8Array): NicoEmotion | null {
+  const reader = new Reader(data);
+
+  while (reader.pos < reader.len) {
+    const tag = reader.uint32();
+    const field = tag >>> 3;
+    const wireType = tag & 7;
+
+    if (field === 2 && wireType === 2) {
       return { content: reader.string() };
     }
     reader.skipType(wireType);
