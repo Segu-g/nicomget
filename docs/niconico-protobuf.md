@@ -195,16 +195,38 @@ ChunkedMessage.state (field 4)
 | 12 | StreamStateChange | ストリーム状態変化 | 未対応 |
 | 13 | AkashicStateRouting | ゲーム状態 | 未対応 |
 
-## 実放送での検証結果 (lv349897488)
+## 実放送での検証結果
+
+### lv349897488
 
 | メッセージ種別 | 検証状況 | 備考 |
 |---------------|---------|------|
 | Chat (field 1) | 確認済み | 通常コメント |
 | OperatorComment (state field 4) | 確認済み | 放送者コメント |
 | SimpleNotificationV2 type=EMOTION (field 23) | 確認済み | 「調子どう？」等 |
-| Overflow Chat (field 20) | 未確認 | ユニットテストのみ |
-| Gift (field 8) | 未確認 | ユニットテストのみ |
 | Signal.Flushed (signal field 5) | 確認済み | セグメント冒頭に毎回送信される |
+
+### lv349896400
+
+| メッセージ種別 | 検証状況 | 備考 |
+|---------------|---------|------|
+| Chat (field 1) | 確認済み | 通常コメント |
+| SimpleNotificationV2 type=EMOTION (field 23) | 確認済み | 「初見」「おやすみ」「★」等 |
+| SimpleNotificationV2 type=VISITED (field 23) | 確認済み | 「〜が好きな1人が来場しました」 |
+
+## DoS対策
+
+以下の防御策を実装済み:
+
+| 対策 | 箇所 | 値 |
+|------|------|-----|
+| メッセージサイズ上限 | `ProtobufParser.readLengthDelimitedMessage` | 16 MB |
+| バッファサイズ上限 | `SegmentStream.handleData`, `MessageStream.handleData` | 16 MB |
+| HTTP接続タイムアウト | `SegmentStream.start`, `MessageStream.start` | 30秒 |
+| ストリーミング無通信タイムアウト | `SegmentStream.readStream`, `MessageStream.readStream` | 60秒 |
+| 放送ページ取得タイムアウト | `NiconicoProvider.fetchWebSocketUrl` | 30秒 |
+| keepSeat間隔のclamp | `WebSocketClient.startKeepSeat` | 10〜300秒 |
+| MessageStreamリスナー清掃 | `NiconicoProvider.replaceMessageStream` | `removeAllListeners()` |
 
 ## デバッグスクリプト
 
