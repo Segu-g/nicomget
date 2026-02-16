@@ -3,11 +3,14 @@ import {
   extractMessages,
   parseChunkedMessage,
   type NicoChat,
+  type NicoGift,
+  type NicoEmotion,
+  type NicoOperatorComment,
 } from './ProtobufParser.js';
 
 /**
  * セグメントサーバーHTTPストリーミング。
- * セグメントURIに接続し ChunkedMessage を解析、Chat を通知する。
+ * セグメントURIに接続し ChunkedMessage を解析、各種メッセージを通知する。
  */
 export class SegmentStream extends EventEmitter {
   private buffer = new Uint8Array(0);
@@ -85,6 +88,18 @@ export class SegmentStream extends EventEmitter {
         const result = parseChunkedMessage(msg);
         for (const chat of result.chats) {
           this.emit('chat', chat);
+        }
+        for (const gift of result.gifts) {
+          this.emit('gift', gift);
+        }
+        for (const emotion of result.emotions) {
+          this.emit('emotion', emotion);
+        }
+        if (result.operatorComment) {
+          this.emit('operatorComment', result.operatorComment);
+        }
+        if (result.signal === 'flushed') {
+          this.emit('signal', 'flushed');
         }
       } catch {
         // malformed protobuf — skip

@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
 import type { ICommentProvider } from '../../interfaces/ICommentProvider.js';
-import type { Comment, ConnectionState } from '../../interfaces/types.js';
-import type { NicoChat } from './ProtobufParser.js';
+import type { Comment, ConnectionState, Gift, Emotion, OperatorComment } from '../../interfaces/types.js';
+import type { NicoChat, NicoGift, NicoEmotion, NicoOperatorComment } from './ProtobufParser.js';
 import { WebSocketClient } from './WebSocketClient.js';
 import { MessageStream } from './MessageStream.js';
 import { SegmentStream } from './SegmentStream.js';
@@ -225,6 +225,50 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
         raw: chat,
       };
       this.emit('comment', comment);
+    });
+
+    segment.on('gift', (nicoGift: NicoGift) => {
+      const gift: Gift = {
+        itemId: nicoGift.itemId,
+        itemName: nicoGift.itemName,
+        userId: nicoGift.advertiserUserId ? String(nicoGift.advertiserUserId) : undefined,
+        userName: nicoGift.advertiserName,
+        point: nicoGift.point,
+        message: nicoGift.message,
+        timestamp: new Date(),
+        platform: 'niconico',
+        raw: nicoGift,
+      };
+      this.emit('gift', gift);
+    });
+
+    segment.on('emotion', (nicoEmotion: NicoEmotion) => {
+      const emotion: Emotion = {
+        id: nicoEmotion.content,
+        timestamp: new Date(),
+        platform: 'niconico',
+        raw: nicoEmotion,
+      };
+      this.emit('emotion', emotion);
+    });
+
+    segment.on('operatorComment', (nicoOp: NicoOperatorComment) => {
+      const operatorComment: OperatorComment = {
+        content: nicoOp.content,
+        name: nicoOp.name,
+        link: nicoOp.link,
+        timestamp: new Date(),
+        platform: 'niconico',
+        raw: nicoOp,
+      };
+      this.emit('operatorComment', operatorComment);
+    });
+
+    segment.on('signal', (signal: string) => {
+      if (signal === 'flushed') {
+        this.emit('end');
+        this.disconnect();
+      }
     });
 
     segment.on('error', (error: Error) => {

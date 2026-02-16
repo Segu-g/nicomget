@@ -9,6 +9,7 @@ import {
   encodeLengthDelimited,
   createChatMessage,
   createNicoliveMessage,
+  createOverflowNicoliveMessage,
   createChunkedMessage,
   createMessageSegment,
   createChunkedEntry,
@@ -17,6 +18,12 @@ import {
   createFullCommentMessage,
   createSegmentEntry,
   createNextEntry,
+  createGiftMessage,
+  createGiftNicoliveMessage,
+  createSimpleNotification,
+  createSimpleNotificationNicoliveMessage,
+  createOperatorCommentState,
+  createSignalMessage,
 } from './helpers/protobufTestData.js';
 
 describe('readLengthDelimitedMessage', () => {
@@ -159,6 +166,8 @@ describe('parseChunkedMessage', () => {
   it('空のChunkedMessageからは空の配列を返す', () => {
     const result = parseChunkedMessage(new Uint8Array(0));
     expect(result.chats).toHaveLength(0);
+    expect(result.gifts).toHaveLength(0);
+    expect(result.emotions).toHaveLength(0);
   });
 
   it('日本語を含むコメントを正しくパースできる', () => {
@@ -200,5 +209,142 @@ describe('parseChunkedMessage', () => {
     const r2 = parseChunkedMessage(messages[1]);
     expect(r1.chats[0].content).toBe('msg1');
     expect(r2.chats[0].content).toBe('msg2');
+  });
+
+  it('あふれコメント (field 20) をChatとしてパースできる', () => {
+    const chat = createChatMessage({
+      no: 99,
+      content: 'overflow comment',
+      hashedUserId: 'a:overflow',
+    });
+    const msg = createOverflowNicoliveMessage(chat);
+    const chunked = createChunkedMessage(msg);
+
+    const result = parseChunkedMessage(chunked);
+    expect(result.chats).toHaveLength(1);
+    expect(result.chats[0].no).toBe(99);
+    expect(result.chats[0].content).toBe('overflow comment');
+  });
+});
+
+describe('parseChunkedMessage - Gift', () => {
+  it('Giftメッセージをパースできる', () => {
+    const gift = createGiftMessage({
+      itemId: 'gift-001',
+      advertiserUserId: 12345,
+      advertiserName: 'テスト太郎',
+      point: 500,
+      message: 'がんばれ！',
+      itemName: 'スーパーギフト',
+      contributionRank: 3,
+    });
+    const msg = createGiftNicoliveMessage(gift);
+    const chunked = createChunkedMessage(msg);
+
+    const result = parseChunkedMessage(chunked);
+    expect(result.gifts).toHaveLength(1);
+    expect(result.gifts[0].itemId).toBe('gift-001');
+    expect(result.gifts[0].advertiserUserId).toBe(12345);
+    expect(result.gifts[0].advertiserName).toBe('テスト太郎');
+    expect(result.gifts[0].point).toBe(500);
+    expect(result.gifts[0].message).toBe('がんばれ！');
+    expect(result.gifts[0].itemName).toBe('スーパーギフト');
+    expect(result.gifts[0].contributionRank).toBe(3);
+  });
+
+  it('最小限のGiftメッセージをパースできる', () => {
+    const gift = createGiftMessage({
+      itemId: 'gift-min',
+      advertiserName: 'user',
+      point: 100,
+      message: '',
+      itemName: 'basic',
+    });
+    const msg = createGiftNicoliveMessage(gift);
+    const chunked = createChunkedMessage(msg);
+
+    const result = parseChunkedMessage(chunked);
+    expect(result.gifts).toHaveLength(1);
+    expect(result.gifts[0].itemId).toBe('gift-min');
+    expect(result.gifts[0].advertiserUserId).toBeUndefined();
+    expect(result.gifts[0].contributionRank).toBeUndefined();
+  });
+});
+
+describe('parseChunkedMessage - SimpleNotification (emotion)', () => {
+  it('エモーションメッセージをパースできる', () => {
+    const notification = createSimpleNotification('🎉');
+    const msg = createSimpleNotificationNicoliveMessage(notification);
+    const chunked = createChunkedMessage(msg);
+
+    const result = parseChunkedMessage(chunked);
+    expect(result.emotions).toHaveLength(1);
+    expect(result.emotions[0].content).toBe('🎉');
+  });
+
+  it('日本語エモーションをパースできる', () => {
+    const notification = createSimpleNotification('わこつ');
+    const msg = createSimpleNotificationNicoliveMessage(notification);
+    const chunked = createChunkedMessage(msg);
+
+    const result = parseChunkedMessage(chunked);
+    expect(result.emotions).toHaveLength(1);
+    expect(result.emotions[0].content).toBe('わこつ');
+  });
+});
+
+describe('parseChunkedMessage - OperatorComment', () => {
+  it('放送者コメントをパースできる', () => {
+    const state = createOperatorCommentState({
+      content: '放送者からのお知らせ',
+      name: '放送者',
+    });
+
+    const result = parseChunkedMessage(state);
+    expect(result.operatorComment).toBeDefined();
+    expect(result.operatorComment!.content).toBe('放送者からのお知らせ');
+    expect(result.operatorComment!.name).toBe('放送者');
+  });
+
+  it('リンク付き放送者コメントをパースできる', () => {
+    const state = createOperatorCommentState({
+      content: 'リンクはこちら',
+      link: 'https://example.com',
+    });
+
+    const result = parseChunkedMessage(state);
+    expect(result.operatorComment).toBeDefined();
+    expect(result.operatorComment!.content).toBe('リンクはこちら');
+    expect(result.operatorComment!.link).toBe('https://example.com');
+  });
+
+  it('contentのみの放送者コメントをパースできる', () => {
+    const state = createOperatorCommentState({
+      content: 'シンプルなお知らせ',
+    });
+
+    const result = parseChunkedMessage(state);
+    expect(result.operatorComment).toBeDefined();
+    expect(result.operatorComment!.content).toBe('シンプルなお知らせ');
+    expect(result.operatorComment!.name).toBeUndefined();
+    expect(result.operatorComment!.link).toBeUndefined();
+  });
+});
+
+describe('parseChunkedMessage - Signal', () => {
+  it('Flushedシグナルをパースできる', () => {
+    const signal = createSignalMessage(0);
+
+    const result = parseChunkedMessage(signal);
+    expect(result.signal).toBe('flushed');
+  });
+
+  it('シグナルなしのメッセージではsignalがundefined', () => {
+    const chat = createChatMessage({ content: 'hello' });
+    const msg = createNicoliveMessage(chat);
+    const chunked = createChunkedMessage(msg);
+
+    const result = parseChunkedMessage(chunked);
+    expect(result.signal).toBeUndefined();
   });
 });

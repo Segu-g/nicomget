@@ -180,7 +180,7 @@ function parseReadyForNext(data) {
 }
 function parseChunkedMessage(data) {
   const reader = new Reader(data);
-  const result = { chats: [] };
+  const result = { chats: [], gifts: [], emotions: [] };
   while (reader.pos < reader.len) {
     const tag = reader.uint32();
     const field = tag >>> 3;
@@ -189,8 +189,21 @@ function parseChunkedMessage(data) {
       const len = reader.uint32();
       const msgData = reader.buf.slice(reader.pos, reader.pos + len);
       reader.pos += len;
-      const chat = parseNicoliveMessage(msgData);
-      if (chat) result.chats.push(chat);
+      const msg = parseNicoliveMessage(msgData);
+      if (msg) {
+        if (msg.chat) result.chats.push(msg.chat);
+        if (msg.gift) result.gifts.push(msg.gift);
+        if (msg.emotion) result.emotions.push(msg.emotion);
+      }
+    } else if (field === 4 && wireType === 2) {
+      const len = reader.uint32();
+      const stateData = reader.buf.slice(reader.pos, reader.pos + len);
+      reader.pos += len;
+      const op = parseNicoliveState(stateData);
+      if (op) result.operatorComment = op;
+    } else if (field === 5 && wireType === 0) {
+      const val = reader.int32();
+      if (val === 0) result.signal = "flushed";
     } else {
       reader.skipType(wireType);
     }
@@ -203,13 +216,27 @@ function parseNicoliveMessage(data) {
     const tag = reader.uint32();
     const field = tag >>> 3;
     const wireType = tag & 7;
-    if (field === 1 && wireType === 2) {
+    if (wireType === 2) {
       const len = reader.uint32();
-      const chatData = reader.buf.slice(reader.pos, reader.pos + len);
+      const subData = reader.buf.slice(reader.pos, reader.pos + len);
       reader.pos += len;
-      return parseChat(chatData);
+      switch (field) {
+        case 1:
+        // chat (Chat)
+        case 20:
+          return { chat: parseChat(subData) };
+        case 7:
+          {
+            const emotion = parseSimpleNotification(subData);
+            if (emotion) return { emotion };
+          }
+          break;
+        case 8:
+          return { gift: parseGift(subData) };
+      }
+    } else {
+      reader.skipType(wireType);
     }
-    reader.skipType(wireType);
   }
   return null;
 }
@@ -270,6 +297,175 @@ function parseChat(data) {
     }
   }
   return chat;
+}
+function parseSimpleNotification(data) {
+  const reader = new Reader(data);
+  while (reader.pos < reader.len) {
+    const tag = reader.uint32();
+    const field = tag >>> 3;
+    const wireType = tag & 7;
+    if (field === 3 && wireType === 2) {
+      return { content: reader.string() };
+    }
+    reader.skipType(wireType);
+  }
+  return null;
+}
+function parseGift(data) {
+  const reader = new Reader(data);
+  const gift = {
+    itemId: "",
+    advertiserName: "",
+    point: 0,
+    message: "",
+    itemName: ""
+  };
+  while (reader.pos < reader.len) {
+    const tag = reader.uint32();
+    const field = tag >>> 3;
+    const wireType = tag & 7;
+    switch (field) {
+      case 1:
+        if (wireType === 2) {
+          gift.itemId = reader.string();
+        } else {
+          reader.skipType(wireType);
+        }
+        break;
+      case 2:
+        if (wireType === 0) {
+          const v = reader.int64();
+          gift.advertiserUserId = typeof v === "number" ? v : Number(v);
+        } else {
+          reader.skipType(wireType);
+        }
+        break;
+      case 3:
+        if (wireType === 2) {
+          gift.advertiserName = reader.string();
+        } else {
+          reader.skipType(wireType);
+        }
+        break;
+      case 4:
+        if (wireType === 0) {
+          const v = reader.int64();
+          gift.point = typeof v === "number" ? v : Number(v);
+        } else {
+          reader.skipType(wireType);
+        }
+        break;
+      case 5:
+        if (wireType === 2) {
+          gift.message = reader.string();
+        } else {
+          reader.skipType(wireType);
+        }
+        break;
+      case 6:
+        if (wireType === 2) {
+          gift.itemName = reader.string();
+        } else {
+          reader.skipType(wireType);
+        }
+        break;
+      case 7:
+        if (wireType === 0) {
+          gift.contributionRank = reader.int32();
+        } else {
+          reader.skipType(wireType);
+        }
+        break;
+      default:
+        reader.skipType(wireType);
+        break;
+    }
+  }
+  return gift;
+}
+function parseNicoliveState(data) {
+  const reader = new Reader(data);
+  while (reader.pos < reader.len) {
+    const tag = reader.uint32();
+    const field = tag >>> 3;
+    const wireType = tag & 7;
+    if (field === 4 && wireType === 2) {
+      const len = reader.uint32();
+      const subData = reader.buf.slice(reader.pos, reader.pos + len);
+      reader.pos += len;
+      return parseMarquee(subData);
+    }
+    reader.skipType(wireType);
+  }
+  return null;
+}
+function parseMarquee(data) {
+  const reader = new Reader(data);
+  while (reader.pos < reader.len) {
+    const tag = reader.uint32();
+    const field = tag >>> 3;
+    const wireType = tag & 7;
+    if (field === 1 && wireType === 2) {
+      const len = reader.uint32();
+      const subData = reader.buf.slice(reader.pos, reader.pos + len);
+      reader.pos += len;
+      return parseDisplay(subData);
+    }
+    reader.skipType(wireType);
+  }
+  return null;
+}
+function parseDisplay(data) {
+  const reader = new Reader(data);
+  while (reader.pos < reader.len) {
+    const tag = reader.uint32();
+    const field = tag >>> 3;
+    const wireType = tag & 7;
+    if (field === 1 && wireType === 2) {
+      const len = reader.uint32();
+      const subData = reader.buf.slice(reader.pos, reader.pos + len);
+      reader.pos += len;
+      return parseOperatorComment(subData);
+    }
+    reader.skipType(wireType);
+  }
+  return null;
+}
+function parseOperatorComment(data) {
+  const reader = new Reader(data);
+  const result = { content: "" };
+  while (reader.pos < reader.len) {
+    const tag = reader.uint32();
+    const field = tag >>> 3;
+    const wireType = tag & 7;
+    switch (field) {
+      case 1:
+        if (wireType === 2) {
+          result.content = reader.string();
+        } else {
+          reader.skipType(wireType);
+        }
+        break;
+      case 2:
+        if (wireType === 2) {
+          result.name = reader.string();
+        } else {
+          reader.skipType(wireType);
+        }
+        break;
+      case 4:
+        if (wireType === 2) {
+          result.link = reader.string();
+        } else {
+          reader.skipType(wireType);
+        }
+        break;
+      default:
+        reader.skipType(wireType);
+        break;
+    }
+  }
+  return result;
 }
 
 class MessageStream extends EventEmitter {
@@ -411,6 +607,18 @@ class SegmentStream extends EventEmitter {
         const result = parseChunkedMessage(msg);
         for (const chat of result.chats) {
           this.emit("chat", chat);
+        }
+        for (const gift of result.gifts) {
+          this.emit("gift", gift);
+        }
+        for (const emotion of result.emotions) {
+          this.emit("emotion", emotion);
+        }
+        if (result.operatorComment) {
+          this.emit("operatorComment", result.operatorComment);
+        }
+        if (result.signal === "flushed") {
+          this.emit("signal", "flushed");
         }
       } catch {
       }
@@ -585,6 +793,46 @@ class NiconicoProvider extends EventEmitter {
         raw: chat
       };
       this.emit("comment", comment);
+    });
+    segment.on("gift", (nicoGift) => {
+      const gift = {
+        itemId: nicoGift.itemId,
+        itemName: nicoGift.itemName,
+        userId: nicoGift.advertiserUserId ? String(nicoGift.advertiserUserId) : void 0,
+        userName: nicoGift.advertiserName,
+        point: nicoGift.point,
+        message: nicoGift.message,
+        timestamp: /* @__PURE__ */ new Date(),
+        platform: "niconico",
+        raw: nicoGift
+      };
+      this.emit("gift", gift);
+    });
+    segment.on("emotion", (nicoEmotion) => {
+      const emotion = {
+        id: nicoEmotion.content,
+        timestamp: /* @__PURE__ */ new Date(),
+        platform: "niconico",
+        raw: nicoEmotion
+      };
+      this.emit("emotion", emotion);
+    });
+    segment.on("operatorComment", (nicoOp) => {
+      const operatorComment = {
+        content: nicoOp.content,
+        name: nicoOp.name,
+        link: nicoOp.link,
+        timestamp: /* @__PURE__ */ new Date(),
+        platform: "niconico",
+        raw: nicoOp
+      };
+      this.emit("operatorComment", operatorComment);
+    });
+    segment.on("signal", (signal) => {
+      if (signal === "flushed") {
+        this.emit("end");
+        this.disconnect();
+      }
     });
     segment.on("error", (error) => {
       this.emit("error", error);

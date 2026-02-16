@@ -1,7 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import { SegmentStream } from '../src/providers/niconico/SegmentStream.js';
-import type { NicoChat } from '../src/providers/niconico/ProtobufParser.js';
-import { createFullCommentMessage } from './helpers/protobufTestData.js';
+import type {
+  NicoChat,
+  NicoGift,
+  NicoEmotion,
+  NicoOperatorComment,
+} from '../src/providers/niconico/ProtobufParser.js';
+import {
+  createFullCommentMessage,
+  createFullGiftMessage,
+  createFullEmotionMessage,
+  createFullOperatorCommentMessage,
+  createFullSignalMessage,
+} from './helpers/protobufTestData.js';
 
 describe('SegmentStream', () => {
   it('ChunkedMessageからchatイベントを発火する', () => {
@@ -70,5 +81,64 @@ describe('SegmentStream', () => {
 
     expect(chats[0].content).toBe('日本語コメント🎉✨');
     expect(chats[0].hashedUserId).toBe('a:ニコニコ太郎');
+  });
+
+  it('giftイベントを発火する', () => {
+    const stream = new SegmentStream('https://example.com/seg', undefined);
+    const gifts: NicoGift[] = [];
+    stream.on('gift', (gift: NicoGift) => gifts.push(gift));
+
+    const data = createFullGiftMessage({
+      itemId: 'gift-001',
+      advertiserName: 'テスト太郎',
+      point: 500,
+      message: 'がんばれ！',
+      itemName: 'スーパーギフト',
+    });
+    stream.handleData(data);
+
+    expect(gifts).toHaveLength(1);
+    expect(gifts[0].itemId).toBe('gift-001');
+    expect(gifts[0].point).toBe(500);
+  });
+
+  it('emotionイベントを発火する', () => {
+    const stream = new SegmentStream('https://example.com/seg', undefined);
+    const emotions: NicoEmotion[] = [];
+    stream.on('emotion', (emotion: NicoEmotion) => emotions.push(emotion));
+
+    const data = createFullEmotionMessage('🎉');
+    stream.handleData(data);
+
+    expect(emotions).toHaveLength(1);
+    expect(emotions[0].content).toBe('🎉');
+  });
+
+  it('operatorCommentイベントを発火する', () => {
+    const stream = new SegmentStream('https://example.com/seg', undefined);
+    const comments: NicoOperatorComment[] = [];
+    stream.on('operatorComment', (comment: NicoOperatorComment) => comments.push(comment));
+
+    const data = createFullOperatorCommentMessage({
+      content: '放送者からのお知らせ',
+      name: '放送者',
+    });
+    stream.handleData(data);
+
+    expect(comments).toHaveLength(1);
+    expect(comments[0].content).toBe('放送者からのお知らせ');
+    expect(comments[0].name).toBe('放送者');
+  });
+
+  it('signalイベントを発火する', () => {
+    const stream = new SegmentStream('https://example.com/seg', undefined);
+    const signals: string[] = [];
+    stream.on('signal', (signal: string) => signals.push(signal));
+
+    const data = createFullSignalMessage(0);
+    stream.handleData(data);
+
+    expect(signals).toHaveLength(1);
+    expect(signals[0]).toBe('flushed');
   });
 });
