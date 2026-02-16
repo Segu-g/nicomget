@@ -57,6 +57,15 @@ describe('readLengthDelimitedMessage', () => {
     expect(result).not.toBeNull();
     expect(result!.message.length).toBe(200);
   });
+
+  it('宣言サイズが上限を超えるメッセージはnullを返す', () => {
+    // varint encoding of 20_000_000 (> 16MB limit)
+    // 20_000_000 = 0x01312D00
+    // varint: 0x80 0xDA 0xC4 0x09
+    const buf = new Uint8Array([0x80, 0xDA, 0xC4, 0x09, 0x00]);
+    const result = readLengthDelimitedMessage(buf);
+    expect(result).toBeNull();
+  });
 });
 
 describe('extractMessages', () => {

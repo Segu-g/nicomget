@@ -87,17 +87,17 @@ describe('WebSocketClient', () => {
     await client.connect();
     await vi.advanceTimersByTimeAsync(50);
 
-    // seat with 1 second interval
+    // seat with 10 second interval (minimum clamped value)
     serverWs!.send(
-      JSON.stringify({ type: 'seat', data: { keepIntervalSec: 1 } }),
+      JSON.stringify({ type: 'seat', data: { keepIntervalSec: 10 } }),
     );
     await vi.advanceTimersByTimeAsync(50);
 
     // Clear initial messages
     serverMessages.length = 0;
 
-    // Advance 1 second
-    await vi.advanceTimersByTimeAsync(1000);
+    // Advance 10 seconds
+    await vi.advanceTimersByTimeAsync(10_000);
     await vi.advanceTimersByTimeAsync(50);
 
     const keepSeatMessages = serverMessages.filter((m) => {

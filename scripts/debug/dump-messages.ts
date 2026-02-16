@@ -12,8 +12,8 @@
 import protobuf from 'protobufjs/minimal.js';
 const { Reader } = protobuf;
 
-import { NiconicoProvider } from '../src/providers/niconico/NiconicoProvider.js';
-import type { Comment, Gift, Emotion, OperatorComment } from '../src/interfaces/types.js';
+import { NiconicoProvider } from '../../src/providers/niconico/NiconicoProvider.js';
+import type { Comment, Gift, Emotion, Notification, OperatorComment } from '../../src/interfaces/types.js';
 
 const liveId = process.argv[2];
 const cookies = process.argv[3];
@@ -35,6 +35,10 @@ provider.on('gift', (gift: Gift) => {
 
 provider.on('emotion', (emotion: Emotion) => {
   console.log(`[EMOTION] ${emotion.id}`);
+});
+
+provider.on('notification', (notification: Notification) => {
+  console.log(`[NOTIFICATION] [${notification.type}] ${notification.message}`);
 });
 
 provider.on('operatorComment', (op: OperatorComment) => {

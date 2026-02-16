@@ -105,9 +105,10 @@ export class WebSocketClient extends EventEmitter {
 
   private startKeepSeat(intervalSec: number): void {
     this.stopKeepSeat();
+    const clamped = Math.max(10, Math.min(300, Number(intervalSec) || 30));
     this.keepSeatInterval = setInterval(() => {
       this.ws?.send(JSON.stringify({ type: 'keepSeat' }));
-    }, intervalSec * 1000);
+    }, clamped * 1000);
   }
 
   private stopKeepSeat(): void {

@@ -24,6 +24,9 @@ const { Reader } = protobuf;
  *   Signal { FLUSHED=0 }
  */
 
+/** メッセージサイズ上限 (16 MB) — これを超えるメッセージは破棄する */
+const MAX_MESSAGE_SIZE = 16 * 1024 * 1024;
+
 /** ニコニコ固有のChat生データ */
 export interface NicoChat {
   no: number;
@@ -104,6 +107,10 @@ export function readLengthDelimitedMessage(
     const reader = new Reader(buffer);
     const messageLength = reader.uint32();
     const headerSize = reader.pos;
+
+    if (messageLength > MAX_MESSAGE_SIZE) {
+      throw new Error(`Message size ${messageLength} exceeds limit ${MAX_MESSAGE_SIZE}`);
+    }
 
     if (buffer.length < headerSize + messageLength) return null;
 

@@ -5,9 +5,9 @@
 import protobuf from 'protobufjs/minimal.js';
 const { Reader } = protobuf;
 
-import { NiconicoProvider } from '../src/providers/niconico/NiconicoProvider.js';
-import { SegmentStream } from '../src/providers/niconico/SegmentStream.js';
-import { extractMessages, parseChunkedMessage } from '../src/providers/niconico/ProtobufParser.js';
+import { NiconicoProvider } from '../../src/providers/niconico/NiconicoProvider.js';
+import { SegmentStream } from '../../src/providers/niconico/SegmentStream.js';
+import { extractMessages, parseChunkedMessage } from '../../src/providers/niconico/ProtobufParser.js';
 
 const liveId = process.argv[2] ?? 'lv349897488';
 const cookies = process.argv[3];

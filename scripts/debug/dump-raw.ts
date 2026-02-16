@@ -5,7 +5,7 @@
 import protobuf from 'protobufjs/minimal.js';
 const { Reader } = protobuf;
 
-import { extractMessages } from '../src/providers/niconico/ProtobufParser.js';
+import { extractMessages } from '../../src/providers/niconico/ProtobufParser.js';
 
 const liveId = process.argv[2];
 const cookies = process.argv[3];

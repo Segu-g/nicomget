@@ -141,7 +141,7 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
     };
     if (this.cookies) headers['Cookie'] = this.cookies;
 
-    const response = await fetch(url, { headers });
+    const response = await fetch(url, { headers, signal: AbortSignal.timeout(30_000) });
     if (!response.ok) {
       throw new Error(`Failed to fetch broadcast page: ${response.status}`);
     }
@@ -168,7 +168,14 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
   }
 
   private startMessageStream(viewUri: string): void {
-    this.messageStream?.stop();
+    this.replaceMessageStream(viewUri, 'now');
+  }
+
+  private replaceMessageStream(viewUri: string, at: string): void {
+    if (this.messageStream) {
+      this.messageStream.removeAllListeners();
+      this.messageStream.stop();
+    }
     this.messageStream = new MessageStream(viewUri, this.cookies);
 
     this.messageStream.on('segment', (segmentUri: string) => {
@@ -176,37 +183,14 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
     });
 
     this.messageStream.on('next', (nextAt: string) => {
-      // 次のストリーム接続を開始
-      this.messageStream?.stop();
-      this.messageStream = new MessageStream(viewUri, this.cookies);
-      this.setupMessageStreamHandlers(viewUri);
-      this.messageStream.start(nextAt).catch((err) => this.emit('error', err));
+      this.replaceMessageStream(viewUri, nextAt);
     });
 
     this.messageStream.on('error', (error: Error) => {
       this.emit('error', error);
     });
 
-    this.messageStream.start('now').catch((err) => this.emit('error', err));
-  }
-
-  private setupMessageStreamHandlers(viewUri: string): void {
-    if (!this.messageStream) return;
-
-    this.messageStream.on('segment', (segmentUri: string) => {
-      this.startSegmentStream(segmentUri);
-    });
-
-    this.messageStream.on('next', (nextAt: string) => {
-      this.messageStream?.stop();
-      this.messageStream = new MessageStream(viewUri, this.cookies);
-      this.setupMessageStreamHandlers(viewUri);
-      this.messageStream.start(nextAt).catch((err) => this.emit('error', err));
-    });
-
-    this.messageStream.on('error', (error: Error) => {
-      this.emit('error', error);
-    });
+    this.messageStream.start(at).catch((err) => this.emit('error', err));
   }
 
   private startSegmentStream(segmentUri: string): void {

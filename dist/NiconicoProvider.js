@@ -84,9 +84,10 @@ class WebSocketClient extends EventEmitter {
   }
   startKeepSeat(intervalSec) {
     this.stopKeepSeat();
+    const clamped = Math.max(10, Math.min(300, Number(intervalSec) || 30));
     this.keepSeatInterval = setInterval(() => {
       this.ws?.send(JSON.stringify({ type: "keepSeat" }));
-    }, intervalSec * 1e3);
+    }, clamped * 1e3);
   }
   stopKeepSeat() {
     if (this.keepSeatInterval) {
@@ -97,12 +98,16 @@ class WebSocketClient extends EventEmitter {
 }
 
 const { Reader } = protobuf;
+const MAX_MESSAGE_SIZE = 16 * 1024 * 1024;
 function readLengthDelimitedMessage(buffer) {
   if (buffer.length === 0) return null;
   try {
     const reader = new Reader(buffer);
     const messageLength = reader.uint32();
     const headerSize = reader.pos;
+    if (messageLength > MAX_MESSAGE_SIZE) {
+      throw new Error(`Message size ${messageLength} exceeds limit ${MAX_MESSAGE_SIZE}`);
+    }
     if (buffer.length < headerSize + messageLength) return null;
     const message = buffer.slice(headerSize, headerSize + messageLength);
     return { message, bytesRead: headerSize + messageLength };
@@ -517,6 +522,9 @@ function parseOperatorComment(data) {
   return result;
 }
 
+const MAX_BUFFER_SIZE$1 = 16 * 1024 * 1024;
+const CONNECT_TIMEOUT_MS$1 = 3e4;
+const INACTIVITY_TIMEOUT_MS$1 = 6e4;
 class MessageStream extends EventEmitter {
   constructor(viewUri, cookies) {
     super();
@@ -536,9 +544,11 @@ class MessageStream extends EventEmitter {
         Priority: "u=1, i"
       };
       if (this.cookies) headers["Cookie"] = this.cookies;
+      const connectTimeout = AbortSignal.timeout(CONNECT_TIMEOUT_MS$1);
+      const signal = AbortSignal.any([this.controller.signal, connectTimeout]);
       const response = await fetch(uri, {
         headers,
-        signal: this.controller.signal
+        signal
       });
       if (!response.ok || !response.body) {
         throw new Error(`Message server returned ${response.status}`);
@@ -557,17 +567,29 @@ class MessageStream extends EventEmitter {
     this.buffer = new Uint8Array(0);
   }
   async readStream(reader) {
+    let inactivityTimer = null;
+    const resetInactivityTimer = () => {
+      if (inactivityTimer) clearTimeout(inactivityTimer);
+      inactivityTimer = setTimeout(() => {
+        this.stop();
+        this.emit("error", new Error("Stream inactivity timeout"));
+      }, INACTIVITY_TIMEOUT_MS$1);
+    };
     try {
+      resetInactivityTimer();
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        resetInactivityTimer();
         this.handleData(value);
       }
       this.emit("end");
     } catch (error) {
-      if (error.name !== "AbortError") {
+      if (error.name !== "AbortError" && error.name !== "TimeoutError") {
         this.emit("error", error);
       }
+    } finally {
+      if (inactivityTimer) clearTimeout(inactivityTimer);
     }
   }
   /** @internal テスト用に公開 */
@@ -577,6 +599,12 @@ class MessageStream extends EventEmitter {
     combined.set(chunk, this.buffer.length);
     const { messages, remaining } = extractMessages(combined);
     this.buffer = new Uint8Array(remaining);
+    if (this.buffer.length > MAX_BUFFER_SIZE$1) {
+      this.buffer = new Uint8Array(0);
+      this.emit("error", new Error(`Buffer size exceeded limit (${MAX_BUFFER_SIZE$1} bytes)`));
+      this.stop();
+      return;
+    }
     for (const msg of messages) {
       try {
         const entry = parseChunkedEntry(msg);
@@ -595,6 +623,9 @@ class MessageStream extends EventEmitter {
   }
 }
 
+const MAX_BUFFER_SIZE = 16 * 1024 * 1024;
+const CONNECT_TIMEOUT_MS = 3e4;
+const INACTIVITY_TIMEOUT_MS = 6e4;
 class SegmentStream extends EventEmitter {
   constructor(segmentUri, cookies) {
     super();
@@ -610,9 +641,11 @@ class SegmentStream extends EventEmitter {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
       };
       if (this.cookies) headers["Cookie"] = this.cookies;
+      const connectTimeout = AbortSignal.timeout(CONNECT_TIMEOUT_MS);
+      const signal = AbortSignal.any([this.controller.signal, connectTimeout]);
       const response = await fetch(this.segmentUri, {
         headers,
-        signal: this.controller.signal
+        signal
       });
       if (!response.ok || !response.body) {
         throw new Error(`Segment server returned ${response.status}`);
@@ -631,17 +664,29 @@ class SegmentStream extends EventEmitter {
     this.buffer = new Uint8Array(0);
   }
   async readStream(reader) {
+    let inactivityTimer = null;
+    const resetInactivityTimer = () => {
+      if (inactivityTimer) clearTimeout(inactivityTimer);
+      inactivityTimer = setTimeout(() => {
+        this.stop();
+        this.emit("error", new Error("Stream inactivity timeout"));
+      }, INACTIVITY_TIMEOUT_MS);
+    };
     try {
+      resetInactivityTimer();
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        resetInactivityTimer();
         this.handleData(value);
       }
       this.emit("end");
     } catch (error) {
-      if (error.name !== "AbortError") {
+      if (error.name !== "AbortError" && error.name !== "TimeoutError") {
         this.emit("error", error);
       }
+    } finally {
+      if (inactivityTimer) clearTimeout(inactivityTimer);
     }
   }
   /** @internal テスト用に公開 */
@@ -651,6 +696,12 @@ class SegmentStream extends EventEmitter {
     combined.set(chunk, this.buffer.length);
     const { messages, remaining } = extractMessages(combined);
     this.buffer = new Uint8Array(remaining);
+    if (this.buffer.length > MAX_BUFFER_SIZE) {
+      this.buffer = new Uint8Array(0);
+      this.emit("error", new Error(`Buffer size exceeded limit (${MAX_BUFFER_SIZE} bytes)`));
+      this.stop();
+      return;
+    }
     for (const msg of messages) {
       try {
         const result = parseChunkedMessage(msg);
@@ -779,7 +830,7 @@ class NiconicoProvider extends EventEmitter {
       "Accept-Language": "ja,en-US;q=0.9,en;q=0.8"
     };
     if (this.cookies) headers["Cookie"] = this.cookies;
-    const response = await fetch(url, { headers });
+    const response = await fetch(url, { headers, signal: AbortSignal.timeout(3e4) });
     if (!response.ok) {
       throw new Error(`Failed to fetch broadcast page: ${response.status}`);
     }
@@ -797,36 +848,24 @@ class NiconicoProvider extends EventEmitter {
     return wsUrl;
   }
   startMessageStream(viewUri) {
-    this.messageStream?.stop();
+    this.replaceMessageStream(viewUri, "now");
+  }
+  replaceMessageStream(viewUri, at) {
+    if (this.messageStream) {
+      this.messageStream.removeAllListeners();
+      this.messageStream.stop();
+    }
     this.messageStream = new MessageStream(viewUri, this.cookies);
     this.messageStream.on("segment", (segmentUri) => {
       this.startSegmentStream(segmentUri);
     });
     this.messageStream.on("next", (nextAt) => {
-      this.messageStream?.stop();
-      this.messageStream = new MessageStream(viewUri, this.cookies);
-      this.setupMessageStreamHandlers(viewUri);
-      this.messageStream.start(nextAt).catch((err) => this.emit("error", err));
+      this.replaceMessageStream(viewUri, nextAt);
     });
     this.messageStream.on("error", (error) => {
       this.emit("error", error);
     });
-    this.messageStream.start("now").catch((err) => this.emit("error", err));
-  }
-  setupMessageStreamHandlers(viewUri) {
-    if (!this.messageStream) return;
-    this.messageStream.on("segment", (segmentUri) => {
-      this.startSegmentStream(segmentUri);
-    });
-    this.messageStream.on("next", (nextAt) => {
-      this.messageStream?.stop();
-      this.messageStream = new MessageStream(viewUri, this.cookies);
-      this.setupMessageStreamHandlers(viewUri);
-      this.messageStream.start(nextAt).catch((err) => this.emit("error", err));
-    });
-    this.messageStream.on("error", (error) => {
-      this.emit("error", error);
-    });
+    this.messageStream.start(at).catch((err) => this.emit("error", err));
   }
   startSegmentStream(segmentUri) {
     if (this.fetchedSegments.has(segmentUri)) return;
