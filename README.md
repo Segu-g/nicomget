@@ -7,9 +7,10 @@
 ## Features
 
 - ニコニコ生放送のコメントをリアルタイム取得
+- ギフト・エモーション・放送者コメントの取得
 - WebSocket 切断時の自動再接続（リトライ回数・間隔を設定可能）
 - TypeScript / ESM 対応
-- イベントベース API（`comment`, `stateChange`, `error`）
+- イベントベース API（`comment`, `gift`, `emotion`, `operatorComment`, `stateChange`, `error`）
 
 ## Install
 
@@ -28,6 +29,18 @@ const provider = new NiconicoProvider({
 
 provider.on('comment', (comment) => {
   console.log(`${comment.userId}: ${comment.content}`);
+});
+
+provider.on('gift', (gift) => {
+  console.log(`${gift.userName} sent ${gift.itemName} (${gift.point}pt)`);
+});
+
+provider.on('emotion', (emotion) => {
+  console.log(`Emotion: ${emotion.id}`);
+});
+
+provider.on('operatorComment', (op) => {
+  console.log(`Operator: ${op.content}`);
 });
 
 provider.on('stateChange', (state) => {
@@ -57,6 +70,9 @@ const provider = new NiconicoProvider({
 | Event | Payload | Description |
 |-------|---------|-------------|
 | `comment` | `Comment` | コメントを受信した |
+| `gift` | `Gift` | ギフトを受信した |
+| `emotion` | `Emotion` | エモーションを受信した |
+| `operatorComment` | `OperatorComment` | 放送者コメントを受信した |
 | `stateChange` | `ConnectionState` | 接続状態が変化した |
 | `error` | `Error` | エラーが発生した |
 
@@ -69,7 +85,35 @@ interface Comment {
   userId?: string;     // ユーザーID
   timestamp: Date;     // 受信日時
   platform: string;    // "niconico"
-  raw: unknown;        // プラットフォーム固有の生データ
+  raw: unknown;        // プラットフォーム固有の生データ (NicoChat)
+}
+
+interface Gift {
+  itemId: string;      // ギフトアイテムID
+  itemName: string;    // ギフトアイテム名
+  userId?: string;     // 贈り主ユーザーID
+  userName?: string;   // 贈り主表示名
+  point: number;       // ポイント数
+  message: string;     // メッセージ
+  timestamp: Date;     // 受信日時
+  platform: string;    // "niconico"
+  raw: unknown;        // プラットフォーム固有の生データ (NicoGift)
+}
+
+interface Emotion {
+  id: string;          // エモーション内容
+  timestamp: Date;     // 受信日時
+  platform: string;    // "niconico"
+  raw: unknown;        // プラットフォーム固有の生データ (NicoEmotion)
+}
+
+interface OperatorComment {
+  content: string;     // コメント本文
+  name?: string;       // 投稿者名
+  link?: string;       // リンクURL
+  timestamp: Date;     // 受信日時
+  platform: string;    // "niconico"
+  raw: unknown;        // プラットフォーム固有の生データ (NicoOperatorComment)
 }
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error';
