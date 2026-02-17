@@ -33,6 +33,10 @@
     "Claude <noreply@anthropic.com>"
   ],
   "license": "MIT",
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "dependencies": {
     "protobufjs": "^7.4.0",
     "ws": "^8.18.0"
