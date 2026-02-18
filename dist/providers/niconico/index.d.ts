@@ -8,6 +8,8 @@ interface Comment {
     content: string;
     /** ユーザーID（匿名の場合はundefined） */
     userId?: string;
+    /** ユーザー名（匿名の場合はundefined） */
+    userName?: string;
     /** 投稿日時 */
     timestamp: Date;
     /** プラットフォーム名 */

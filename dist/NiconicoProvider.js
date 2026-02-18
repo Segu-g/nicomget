@@ -538,24 +538,27 @@ class MessageStream extends EventEmitter {
     const separator = this.viewUri.includes("?") ? "&" : "?";
     const uri = `${this.viewUri}${separator}at=${at}`;
     this.controller = new AbortController();
+    const connectTimer = setTimeout(() => {
+      this.controller?.abort();
+    }, CONNECT_TIMEOUT_MS$1);
     try {
       const headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         Priority: "u=1, i"
       };
       if (this.cookies) headers["Cookie"] = this.cookies;
-      const connectTimeout = AbortSignal.timeout(CONNECT_TIMEOUT_MS$1);
-      const signal = AbortSignal.any([this.controller.signal, connectTimeout]);
       const response = await fetch(uri, {
         headers,
-        signal
+        signal: this.controller.signal
       });
+      clearTimeout(connectTimer);
       if (!response.ok || !response.body) {
         throw new Error(`Message server returned ${response.status}`);
       }
       const reader = response.body.getReader();
       await this.readStream(reader);
     } catch (error) {
+      clearTimeout(connectTimer);
       if (error.name !== "AbortError") {
         this.emit("error", error);
       }
@@ -585,7 +588,7 @@ class MessageStream extends EventEmitter {
       }
       this.emit("end");
     } catch (error) {
-      if (error.name !== "AbortError" && error.name !== "TimeoutError") {
+      if (error.name !== "AbortError") {
         this.emit("error", error);
       }
     } finally {
@@ -605,20 +608,21 @@ class MessageStream extends EventEmitter {
       this.stop();
       return;
     }
+    let nextAt;
     for (const msg of messages) {
       try {
         const entry = parseChunkedEntry(msg);
-        this.emitEntry(entry);
+        if (entry.segmentUri) {
+          this.emit("segment", entry.segmentUri);
+        }
+        if (entry.nextAt) {
+          nextAt = entry.nextAt;
+        }
       } catch {
       }
     }
-  }
-  emitEntry(entry) {
-    if (entry.segmentUri) {
-      this.emit("segment", entry.segmentUri);
-    }
-    if (entry.nextAt) {
-      this.emit("next", entry.nextAt);
+    if (nextAt) {
+      this.emit("next", nextAt);
     }
   }
 }
@@ -636,23 +640,26 @@ class SegmentStream extends EventEmitter {
   controller = null;
   async start() {
     this.controller = new AbortController();
+    const connectTimer = setTimeout(() => {
+      this.controller?.abort();
+    }, CONNECT_TIMEOUT_MS);
     try {
       const headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
       };
       if (this.cookies) headers["Cookie"] = this.cookies;
-      const connectTimeout = AbortSignal.timeout(CONNECT_TIMEOUT_MS);
-      const signal = AbortSignal.any([this.controller.signal, connectTimeout]);
       const response = await fetch(this.segmentUri, {
         headers,
-        signal
+        signal: this.controller.signal
       });
+      clearTimeout(connectTimer);
       if (!response.ok || !response.body) {
         throw new Error(`Segment server returned ${response.status}`);
       }
       const reader = response.body.getReader();
       await this.readStream(reader);
     } catch (error) {
+      clearTimeout(connectTimer);
       if (error.name !== "AbortError") {
         this.emit("error", error);
       }
@@ -682,7 +689,7 @@ class SegmentStream extends EventEmitter {
       }
       this.emit("end");
     } catch (error) {
-      if (error.name !== "AbortError" && error.name !== "TimeoutError") {
+      if (error.name !== "AbortError") {
         this.emit("error", error);
       }
     } finally {
@@ -865,6 +872,9 @@ class NiconicoProvider extends EventEmitter {
     this.messageStream.on("error", (error) => {
       this.emit("error", error);
     });
+    this.messageStream.on("end", () => {
+      this.replaceMessageStream(viewUri, "now");
+    });
     this.messageStream.start(at).catch((err) => this.emit("error", err));
   }
   startSegmentStream(segmentUri) {
@@ -876,6 +886,7 @@ class NiconicoProvider extends EventEmitter {
         id: String(chat.no),
         content: chat.content,
         userId: chat.hashedUserId || (chat.rawUserId ? String(chat.rawUserId) : void 0),
+        userName: chat.name,
         timestamp: /* @__PURE__ */ new Date(),
         platform: "niconico",
         raw: chat
