@@ -190,6 +190,11 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
       this.emit('error', error);
     });
 
+    this.messageStream.on('end', () => {
+      // ストリームが nextAt なしで終了した場合、現在時刻で再接続
+      this.replaceMessageStream(viewUri, 'now');
+    });
+
     this.messageStream.start(at).catch((err) => this.emit('error', err));
   }
 

@@ -2,7 +2,6 @@ import { EventEmitter } from 'events';
 import {
   extractMessages,
   parseChunkedEntry,
-  type ChunkedEntryResult,
 } from './ProtobufParser.js';
 
 /** バッファサイズ上限 (16 MB) */
@@ -35,6 +34,11 @@ export class MessageStream extends EventEmitter {
     const uri = `${this.viewUri}${separator}at=${at}`;
     this.controller = new AbortController();
 
+    // 接続フェーズのみのタイムアウト（ヘッダ受信後にクリア）
+    const connectTimer = setTimeout(() => {
+      this.controller?.abort();
+    }, CONNECT_TIMEOUT_MS);
+
     try {
       const headers: Record<string, string> = {
         'User-Agent':
@@ -43,13 +47,12 @@ export class MessageStream extends EventEmitter {
       };
       if (this.cookies) headers['Cookie'] = this.cookies;
 
-      const connectTimeout = AbortSignal.timeout(CONNECT_TIMEOUT_MS);
-      const signal = AbortSignal.any([this.controller.signal, connectTimeout]);
-
       const response = await fetch(uri, {
         headers,
-        signal,
+        signal: this.controller.signal,
       });
+
+      clearTimeout(connectTimer);
 
       if (!response.ok || !response.body) {
         throw new Error(`Message server returned ${response.status}`);
@@ -58,6 +61,7 @@ export class MessageStream extends EventEmitter {
       const reader = response.body.getReader();
       await this.readStream(reader);
     } catch (error) {
+      clearTimeout(connectTimer);
       if ((error as Error).name !== 'AbortError') {
         this.emit('error', error);
       }
@@ -93,7 +97,7 @@ export class MessageStream extends EventEmitter {
       }
       this.emit('end');
     } catch (error) {
-      if ((error as Error).name !== 'AbortError' && (error as Error).name !== 'TimeoutError') {
+      if ((error as Error).name !== 'AbortError') {
         this.emit('error', error);
       }
     } finally {
@@ -117,22 +121,26 @@ export class MessageStream extends EventEmitter {
       return;
     }
 
+    let nextAt: string | undefined;
+
     for (const msg of messages) {
       try {
         const entry = parseChunkedEntry(msg);
-        this.emitEntry(entry);
+        if (entry.segmentUri) {
+          this.emit('segment', entry.segmentUri);
+        }
+        if (entry.nextAt) {
+          nextAt = entry.nextAt;
+        }
       } catch {
         // malformed protobuf — skip
       }
     }
-  }
 
-  private emitEntry(entry: ChunkedEntryResult): void {
-    if (entry.segmentUri) {
-      this.emit('segment', entry.segmentUri);
-    }
-    if (entry.nextAt) {
-      this.emit('next', entry.nextAt);
+    // nextAt は全 segment を処理した後に発火
+    // (next ハンドラが removeAllListeners() を呼ぶため)
+    if (nextAt) {
+      this.emit('next', nextAt);
     }
   }
 }

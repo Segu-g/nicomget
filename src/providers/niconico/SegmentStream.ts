@@ -36,6 +36,11 @@ export class SegmentStream extends EventEmitter {
   async start(): Promise<void> {
     this.controller = new AbortController();
 
+    // 接続フェーズのみのタイムアウト（ヘッダ受信後にクリア）
+    const connectTimer = setTimeout(() => {
+      this.controller?.abort();
+    }, CONNECT_TIMEOUT_MS);
+
     try {
       const headers: Record<string, string> = {
         'User-Agent':
@@ -43,13 +48,12 @@ export class SegmentStream extends EventEmitter {
       };
       if (this.cookies) headers['Cookie'] = this.cookies;
 
-      const connectTimeout = AbortSignal.timeout(CONNECT_TIMEOUT_MS);
-      const signal = AbortSignal.any([this.controller.signal, connectTimeout]);
-
       const response = await fetch(this.segmentUri, {
         headers,
-        signal,
+        signal: this.controller.signal,
       });
+
+      clearTimeout(connectTimer);
 
       if (!response.ok || !response.body) {
         throw new Error(`Segment server returned ${response.status}`);
@@ -58,6 +62,7 @@ export class SegmentStream extends EventEmitter {
       const reader = response.body.getReader();
       await this.readStream(reader);
     } catch (error) {
+      clearTimeout(connectTimer);
       if ((error as Error).name !== 'AbortError') {
         this.emit('error', error);
       }
@@ -93,7 +98,7 @@ export class SegmentStream extends EventEmitter {
       }
       this.emit('end');
     } catch (error) {
-      if ((error as Error).name !== 'AbortError' && (error as Error).name !== 'TimeoutError') {
+      if ((error as Error).name !== 'AbortError') {
         this.emit('error', error);
       }
     } finally {
