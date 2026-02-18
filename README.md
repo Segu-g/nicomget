@@ -15,7 +15,7 @@
 ## Install
 
 ```bash
-npm install nicomget
+npm install github:Segu-g/nicomget
 ```
 
 ## Usage
