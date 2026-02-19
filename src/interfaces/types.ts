@@ -8,6 +8,8 @@ export interface Comment {
   userId?: string;
   /** ユーザー名（匿名の場合はundefined） */
   userName?: string;
+  /** ユーザーアイコンURL（匿名の場合はundefined） */
+  userIcon?: string;
   /** 投稿日時 */
   timestamp: Date;
   /** プラットフォーム名 */

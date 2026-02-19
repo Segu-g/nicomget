@@ -326,6 +326,7 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
       content: chat.content,
       userId: chat.hashedUserId || (chat.rawUserId ? String(chat.rawUserId) : undefined),
       userName: chat.name?.startsWith('a:') ? undefined : chat.name,
+      userIcon: chat.rawUserId ? `https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/${Math.floor(chat.rawUserId / 10000)}/${chat.rawUserId}.jpg` : undefined,
       timestamp: new Date(),
       platform: 'niconico',
       raw: chat,

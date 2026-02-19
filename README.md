@@ -114,6 +114,7 @@ interface Comment {
   content: string;     // コメント本文
   userId?: string;     // ユーザーID
   userName?: string;   // ユーザー名（匿名コメントの場合はundefined）
+  userIcon?: string;   // ユーザーアイコンURL（匿名コメントの場合はundefined）
   timestamp: Date;     // 受信日時
   platform: string;    // "niconico"
   raw: unknown;        // プラットフォーム固有の生データ (NicoChat)
