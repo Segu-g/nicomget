@@ -1126,7 +1126,8 @@ class NiconicoProvider extends EventEmitter {
       id: String(chat.no),
       content: chat.content,
       userId: chat.hashedUserId || (chat.rawUserId ? String(chat.rawUserId) : void 0),
-      userName: chat.name,
+      userName: chat.name?.startsWith("a:") ? void 0 : chat.name,
+      userIcon: chat.rawUserId ? `https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/${Math.floor(chat.rawUserId / 1e4)}/${chat.rawUserId}.jpg` : void 0,
       timestamp: /* @__PURE__ */ new Date(),
       platform: "niconico",
       raw: chat
