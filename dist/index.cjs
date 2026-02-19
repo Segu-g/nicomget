@@ -1,18 +1,57 @@
-import { EventEmitter } from 'events';
-import WebSocket from 'ws';
-import protobuf from 'protobufjs/minimal.js';
+"use strict";
+var __create = Object.create;
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
 
-class WebSocketClient extends EventEmitter {
-  webSocketUrl;
-  ws = null;
-  keepSeatInterval = null;
+// src/index.ts
+var index_exports = {};
+__export(index_exports, {
+  NiconicoProvider: () => NiconicoProvider
+});
+module.exports = __toCommonJS(index_exports);
+
+// src/providers/niconico/NiconicoProvider.ts
+var import_events5 = require("events");
+
+// src/providers/niconico/WebSocketClient.ts
+var import_events = require("events");
+var import_ws = __toESM(require("ws"), 1);
+var WebSocketClient = class extends import_events.EventEmitter {
   constructor(webSocketUrl) {
     super();
     this.webSocketUrl = webSocketUrl;
+    __publicField(this, "ws", null);
+    __publicField(this, "keepSeatInterval", null);
   }
   connect() {
     return new Promise((resolve, reject) => {
-      this.ws = new WebSocket(this.webSocketUrl);
+      this.ws = new import_ws.default(this.webSocketUrl);
       this.ws.on("open", () => {
         this.sendStartWatching();
         this.emit("open");
@@ -43,22 +82,24 @@ class WebSocketClient extends EventEmitter {
     }
   }
   sendStartWatching() {
-    this.ws?.send(JSON.stringify({
-      type: "startWatching",
-      data: {
-        stream: {
-          quality: "abr",
-          protocol: "hls",
-          latency: "low",
-          chasePlay: false
-        },
-        room: {
-          protocol: "webSocket",
-          commentable: false
-        },
-        reconnect: false
-      }
-    }));
+    this.ws?.send(
+      JSON.stringify({
+        type: "startWatching",
+        data: {
+          stream: {
+            quality: "abr",
+            protocol: "hls",
+            latency: "low",
+            chasePlay: false
+          },
+          room: {
+            protocol: "webSocket",
+            commentable: false
+          },
+          reconnect: false
+        }
+      })
+    );
   }
   handleMessage(message) {
     switch (message.type) {
@@ -94,13 +135,17 @@ class WebSocketClient extends EventEmitter {
       this.keepSeatInterval = null;
     }
   }
-}
+};
 
-const { Reader } = protobuf;
-const MAX_MESSAGE_SIZE = 16 * 1024 * 1024;
+// src/providers/niconico/MessageStream.ts
+var import_events2 = require("events");
+
+// src/providers/niconico/ProtobufParser.ts
+var import_minimal = __toESM(require("protobufjs/minimal.js"), 1);
+var { Reader } = import_minimal.default;
+var MAX_MESSAGE_SIZE = 16 * 1024 * 1024;
 function readLengthDelimitedMessage(buffer) {
-  if (buffer.length === 0)
-    return null;
+  if (buffer.length === 0) return null;
   try {
     const reader = new Reader(buffer);
     const messageLength = reader.uint32();
@@ -108,8 +153,7 @@ function readLengthDelimitedMessage(buffer) {
     if (messageLength > MAX_MESSAGE_SIZE) {
       throw new Error(`Message size ${messageLength} exceeds limit ${MAX_MESSAGE_SIZE}`);
     }
-    if (buffer.length < headerSize + messageLength)
-      return null;
+    if (buffer.length < headerSize + messageLength) return null;
     const message = buffer.slice(headerSize, headerSize + messageLength);
     return { message, bytesRead: headerSize + messageLength };
   } catch {
@@ -121,8 +165,7 @@ function extractMessages(buffer) {
   let offset = 0;
   while (offset < buffer.length) {
     const result = readLengthDelimitedMessage(buffer.slice(offset));
-    if (!result)
-      break;
+    if (!result) break;
     messages.push(result.message);
     offset += result.bytesRead;
   }
@@ -201,26 +244,20 @@ function parseChunkedMessage(data) {
       reader.pos += len;
       const msg = parseNicoliveMessage(msgData);
       if (msg) {
-        if (msg.chat)
-          result.chats.push(msg.chat);
-        if (msg.gift)
-          result.gifts.push(msg.gift);
-        if (msg.emotion)
-          result.emotions.push(msg.emotion);
-        if (msg.notification)
-          result.notifications.push(msg.notification);
+        if (msg.chat) result.chats.push(msg.chat);
+        if (msg.gift) result.gifts.push(msg.gift);
+        if (msg.emotion) result.emotions.push(msg.emotion);
+        if (msg.notification) result.notifications.push(msg.notification);
       }
     } else if (field === 4 && wireType === 2) {
       const len = reader.uint32();
       const stateData = reader.buf.slice(reader.pos, reader.pos + len);
       reader.pos += len;
       const op = parseNicoliveState(stateData);
-      if (op)
-        result.operatorComment = op;
+      if (op) result.operatorComment = op;
     } else if (field === 5 && wireType === 0) {
       const val = reader.int32();
-      if (val === 0)
-        result.signal = "flushed";
+      if (val === 0) result.signal = "flushed";
     } else {
       reader.skipType(wireType);
     }
@@ -245,8 +282,7 @@ function parseNicoliveMessage(data) {
         case 7:
           {
             const emotion = parseSimpleNotification(subData);
-            if (emotion)
-              return { emotion };
+            if (emotion) return { emotion };
           }
           break;
         case 8:
@@ -331,7 +367,7 @@ function parseSimpleNotification(data) {
   }
   return null;
 }
-const NOTIFICATION_TYPE_MAP = {
+var NOTIFICATION_TYPE_MAP = {
   0: "unknown",
   1: "ichiba",
   // 2 = EMOTION → emotion として返すため含まない
@@ -590,18 +626,17 @@ function parsePackedSegment(data) {
   return result;
 }
 
-const MAX_BUFFER_SIZE$1 = 16 * 1024 * 1024;
-const CONNECT_TIMEOUT_MS$2 = 3e4;
-const INACTIVITY_TIMEOUT_MS$1 = 6e4;
-class MessageStream extends EventEmitter {
-  viewUri;
-  cookies;
-  buffer = new Uint8Array(0);
-  controller = null;
+// src/providers/niconico/MessageStream.ts
+var MAX_BUFFER_SIZE = 16 * 1024 * 1024;
+var CONNECT_TIMEOUT_MS = 3e4;
+var INACTIVITY_TIMEOUT_MS = 6e4;
+var MessageStream = class extends import_events2.EventEmitter {
   constructor(viewUri, cookies) {
     super();
     this.viewUri = viewUri;
     this.cookies = cookies;
+    __publicField(this, "buffer", new Uint8Array(0));
+    __publicField(this, "controller", null);
   }
   /** ストリーミング開始（at パラメータ指定） */
   async start(at = "now") {
@@ -610,14 +645,13 @@ class MessageStream extends EventEmitter {
     this.controller = new AbortController();
     const connectTimer = setTimeout(() => {
       this.controller?.abort();
-    }, CONNECT_TIMEOUT_MS$2);
+    }, CONNECT_TIMEOUT_MS);
     try {
       const headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         Priority: "u=1, i"
       };
-      if (this.cookies)
-        headers["Cookie"] = this.cookies;
+      if (this.cookies) headers["Cookie"] = this.cookies;
       const response = await fetch(uri, {
         headers,
         signal: this.controller.signal
@@ -643,19 +677,17 @@ class MessageStream extends EventEmitter {
   async readStream(reader) {
     let inactivityTimer = null;
     const resetInactivityTimer = () => {
-      if (inactivityTimer)
-        clearTimeout(inactivityTimer);
+      if (inactivityTimer) clearTimeout(inactivityTimer);
       inactivityTimer = setTimeout(() => {
         this.stop();
         this.emit("error", new Error("Stream inactivity timeout"));
-      }, INACTIVITY_TIMEOUT_MS$1);
+      }, INACTIVITY_TIMEOUT_MS);
     };
     try {
       resetInactivityTimer();
       while (true) {
         const { done, value } = await reader.read();
-        if (done)
-          break;
+        if (done) break;
         resetInactivityTimer();
         this.handleData(value);
       }
@@ -665,8 +697,7 @@ class MessageStream extends EventEmitter {
         this.emit("error", error);
       }
     } finally {
-      if (inactivityTimer)
-        clearTimeout(inactivityTimer);
+      if (inactivityTimer) clearTimeout(inactivityTimer);
     }
   }
   /** @internal テスト用に公開 */
@@ -676,9 +707,9 @@ class MessageStream extends EventEmitter {
     combined.set(chunk, this.buffer.length);
     const { messages, remaining } = extractMessages(combined);
     this.buffer = new Uint8Array(remaining);
-    if (this.buffer.length > MAX_BUFFER_SIZE$1) {
+    if (this.buffer.length > MAX_BUFFER_SIZE) {
       this.buffer = new Uint8Array(0);
-      this.emit("error", new Error(`Buffer size exceeded limit (${MAX_BUFFER_SIZE$1} bytes)`));
+      this.emit("error", new Error(`Buffer size exceeded limit (${MAX_BUFFER_SIZE} bytes)`));
       this.stop();
       return;
     }
@@ -702,32 +733,31 @@ class MessageStream extends EventEmitter {
       this.emit("next", nextAt);
     }
   }
-}
+};
 
-const MAX_BUFFER_SIZE = 16 * 1024 * 1024;
-const CONNECT_TIMEOUT_MS$1 = 3e4;
-const INACTIVITY_TIMEOUT_MS = 6e4;
-class SegmentStream extends EventEmitter {
-  segmentUri;
-  cookies;
-  buffer = new Uint8Array(0);
-  controller = null;
+// src/providers/niconico/SegmentStream.ts
+var import_events3 = require("events");
+var MAX_BUFFER_SIZE2 = 16 * 1024 * 1024;
+var CONNECT_TIMEOUT_MS2 = 3e4;
+var INACTIVITY_TIMEOUT_MS2 = 6e4;
+var SegmentStream = class extends import_events3.EventEmitter {
   constructor(segmentUri, cookies) {
     super();
     this.segmentUri = segmentUri;
     this.cookies = cookies;
+    __publicField(this, "buffer", new Uint8Array(0));
+    __publicField(this, "controller", null);
   }
   async start() {
     this.controller = new AbortController();
     const connectTimer = setTimeout(() => {
       this.controller?.abort();
-    }, CONNECT_TIMEOUT_MS$1);
+    }, CONNECT_TIMEOUT_MS2);
     try {
       const headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
       };
-      if (this.cookies)
-        headers["Cookie"] = this.cookies;
+      if (this.cookies) headers["Cookie"] = this.cookies;
       const response = await fetch(this.segmentUri, {
         headers,
         signal: this.controller.signal
@@ -753,19 +783,17 @@ class SegmentStream extends EventEmitter {
   async readStream(reader) {
     let inactivityTimer = null;
     const resetInactivityTimer = () => {
-      if (inactivityTimer)
-        clearTimeout(inactivityTimer);
+      if (inactivityTimer) clearTimeout(inactivityTimer);
       inactivityTimer = setTimeout(() => {
         this.stop();
         this.emit("error", new Error("Stream inactivity timeout"));
-      }, INACTIVITY_TIMEOUT_MS);
+      }, INACTIVITY_TIMEOUT_MS2);
     };
     try {
       resetInactivityTimer();
       while (true) {
         const { done, value } = await reader.read();
-        if (done)
-          break;
+        if (done) break;
         resetInactivityTimer();
         this.handleData(value);
       }
@@ -775,8 +803,7 @@ class SegmentStream extends EventEmitter {
         this.emit("error", error);
       }
     } finally {
-      if (inactivityTimer)
-        clearTimeout(inactivityTimer);
+      if (inactivityTimer) clearTimeout(inactivityTimer);
     }
   }
   /** @internal テスト用に公開 */
@@ -786,9 +813,9 @@ class SegmentStream extends EventEmitter {
     combined.set(chunk, this.buffer.length);
     const { messages, remaining } = extractMessages(combined);
     this.buffer = new Uint8Array(remaining);
-    if (this.buffer.length > MAX_BUFFER_SIZE) {
+    if (this.buffer.length > MAX_BUFFER_SIZE2) {
       this.buffer = new Uint8Array(0);
-      this.emit("error", new Error(`Buffer size exceeded limit (${MAX_BUFFER_SIZE} bytes)`));
+      this.emit("error", new Error(`Buffer size exceeded limit (${MAX_BUFFER_SIZE2} bytes)`));
       this.stop();
       return;
     }
@@ -814,20 +841,20 @@ class SegmentStream extends EventEmitter {
       }
     }
   }
-}
+};
 
-const MAX_CHAIN_DEPTH = 50;
-const FETCH_DELAY_MS = 100;
-const MAX_RESPONSE_SIZE = 16 * 1024 * 1024;
-const CONNECT_TIMEOUT_MS = 3e4;
-class BackwardStream extends EventEmitter {
-  initialUri;
-  cookies;
-  stopped = false;
+// src/providers/niconico/BackwardStream.ts
+var import_events4 = require("events");
+var MAX_CHAIN_DEPTH = 50;
+var FETCH_DELAY_MS = 100;
+var MAX_RESPONSE_SIZE = 16 * 1024 * 1024;
+var CONNECT_TIMEOUT_MS3 = 3e4;
+var BackwardStream = class extends import_events4.EventEmitter {
   constructor(initialUri, cookies) {
     super();
     this.initialUri = initialUri;
     this.cookies = cookies;
+    __publicField(this, "stopped", false);
   }
   async start() {
     const segments = [];
@@ -850,12 +877,10 @@ class BackwardStream extends EventEmitter {
         break;
       }
     }
-    if (this.stopped)
-      return;
+    if (this.stopped) return;
     for (let i = segments.length - 1; i >= 0; i--) {
       for (const msg of segments[i]) {
-        if (this.stopped)
-          return;
+        if (this.stopped) return;
         for (const chat of msg.chats) {
           this.emit("chat", chat);
         }
@@ -882,13 +907,12 @@ class BackwardStream extends EventEmitter {
   }
   async fetchSegment(uri) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), CONNECT_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), CONNECT_TIMEOUT_MS3);
     try {
       const headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
       };
-      if (this.cookies)
-        headers["Cookie"] = this.cookies;
+      if (this.cookies) headers["Cookie"] = this.cookies;
       const response = await fetch(uri, {
         headers,
         signal: controller.signal
@@ -907,30 +931,31 @@ class BackwardStream extends EventEmitter {
       throw error;
     }
   }
-}
+};
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-class NiconicoProvider extends EventEmitter {
-  liveId;
-  cookies;
-  maxRetries;
-  retryIntervalMs;
-  fetchBacklog;
-  backlogEvents;
-  wsClient = null;
-  messageStream = null;
-  segmentStreams = [];
-  fetchedSegments = /* @__PURE__ */ new Set();
-  backwardStream = null;
-  seenChatNos = /* @__PURE__ */ new Set();
-  state = "disconnected";
-  intentionalDisconnect = false;
-  reconnectCount = 0;
-  reconnectTimer = null;
+// src/providers/niconico/NiconicoProvider.ts
+var NiconicoProvider = class extends import_events5.EventEmitter {
   constructor(options) {
     super();
+    __publicField(this, "liveId");
+    __publicField(this, "cookies");
+    __publicField(this, "maxRetries");
+    __publicField(this, "retryIntervalMs");
+    __publicField(this, "fetchBacklog");
+    __publicField(this, "backlogEvents");
+    __publicField(this, "wsClient", null);
+    __publicField(this, "messageStream", null);
+    __publicField(this, "segmentStreams", []);
+    __publicField(this, "fetchedSegments", /* @__PURE__ */ new Set());
+    __publicField(this, "backwardStream", null);
+    __publicField(this, "seenChatNos", /* @__PURE__ */ new Set());
+    __publicField(this, "state", "disconnected");
+    __publicField(this, "intentionalDisconnect", false);
+    __publicField(this, "reconnectCount", 0);
+    __publicField(this, "reconnectTimer", null);
     this.liveId = options.liveId;
     this.cookies = options.cookies;
     this.maxRetries = options.maxRetries ?? 5;
@@ -980,8 +1005,7 @@ class NiconicoProvider extends EventEmitter {
     }
     this.wsClient?.disconnect();
     this.messageStream?.stop();
-    for (const s of this.segmentStreams)
-      s.stop();
+    for (const s of this.segmentStreams) s.stop();
     this.segmentStreams = [];
     this.fetchedSegments.clear();
     this.backwardStream?.stop();
@@ -1025,8 +1049,7 @@ class NiconicoProvider extends EventEmitter {
       Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       "Accept-Language": "ja,en-US;q=0.9,en;q=0.8"
     };
-    if (this.cookies)
-      headers["Cookie"] = this.cookies;
+    if (this.cookies) headers["Cookie"] = this.cookies;
     const response = await fetch(url, { headers, signal: AbortSignal.timeout(3e4) });
     if (!response.ok) {
       throw new Error(`Failed to fetch broadcast page: ${response.status}`);
@@ -1073,13 +1096,11 @@ class NiconicoProvider extends EventEmitter {
     this.messageStream.start(at).catch((err) => this.emit("error", err));
   }
   startSegmentStream(segmentUri) {
-    if (this.fetchedSegments.has(segmentUri))
-      return;
+    if (this.fetchedSegments.has(segmentUri)) return;
     this.fetchedSegments.add(segmentUri);
     const segment = new SegmentStream(segmentUri, this.cookies);
     segment.on("chat", (chat) => {
-      if (this.isDuplicateChat(chat))
-        return;
+      if (this.isDuplicateChat(chat)) return;
       this.emit("comment", this.mapChat(chat));
     });
     segment.on("gift", (nicoGift) => {
@@ -1099,21 +1120,18 @@ class NiconicoProvider extends EventEmitter {
     });
     segment.on("end", () => {
       const idx = this.segmentStreams.indexOf(segment);
-      if (idx >= 0)
-        this.segmentStreams.splice(idx, 1);
+      if (idx >= 0) this.segmentStreams.splice(idx, 1);
     });
     this.segmentStreams.push(segment);
     segment.start().catch((err) => this.emit("error", err));
   }
   startBackwardStream(backwardUri) {
-    if (this.backwardStream)
-      return;
+    if (this.backwardStream) return;
     const backward = new BackwardStream(backwardUri, this.cookies);
     this.backwardStream = backward;
     if (this.backlogEvents.has("chat")) {
       backward.on("chat", (chat) => {
-        if (this.isDuplicateChat(chat))
-          return;
+        if (this.isDuplicateChat(chat)) return;
         this.emit("comment", this.mapChat(chat, true));
       });
     }
@@ -1149,10 +1167,8 @@ class NiconicoProvider extends EventEmitter {
   }
   /** chat.no ベースの重複排除（no > 0 のみ対象） */
   isDuplicateChat(chat) {
-    if (chat.no <= 0)
-      return false;
-    if (this.seenChatNos.has(chat.no))
-      return true;
+    if (chat.no <= 0) return false;
+    if (this.seenChatNos.has(chat.no)) return true;
     this.seenChatNos.add(chat.no);
     return false;
   }
@@ -1167,8 +1183,7 @@ class NiconicoProvider extends EventEmitter {
       platform: "niconico",
       raw: chat
     };
-    if (isHistory)
-      comment.isHistory = true;
+    if (isHistory) comment.isHistory = true;
     return comment;
   }
   mapGift(nicoGift, isHistory) {
@@ -1183,8 +1198,7 @@ class NiconicoProvider extends EventEmitter {
       platform: "niconico",
       raw: nicoGift
     };
-    if (isHistory)
-      gift.isHistory = true;
+    if (isHistory) gift.isHistory = true;
     return gift;
   }
   mapEmotion(nicoEmotion, isHistory) {
@@ -1194,8 +1208,7 @@ class NiconicoProvider extends EventEmitter {
       platform: "niconico",
       raw: nicoEmotion
     };
-    if (isHistory)
-      emotion.isHistory = true;
+    if (isHistory) emotion.isHistory = true;
     return emotion;
   }
   mapNotification(nicoNotif, isHistory) {
@@ -1206,8 +1219,7 @@ class NiconicoProvider extends EventEmitter {
       platform: "niconico",
       raw: nicoNotif
     };
-    if (isHistory)
-      notification.isHistory = true;
+    if (isHistory) notification.isHistory = true;
     return notification;
   }
   mapOperatorComment(nicoOp, isHistory) {
@@ -1219,11 +1231,12 @@ class NiconicoProvider extends EventEmitter {
       platform: "niconico",
       raw: nicoOp
     };
-    if (isHistory)
-      operatorComment.isHistory = true;
+    if (isHistory) operatorComment.isHistory = true;
     return operatorComment;
   }
-}
-
-export { BackwardStream as B, NiconicoProvider as N };
-//# sourceMappingURL=NiconicoProvider.js.map
+};
+// Annotate the CommonJS export names for ESM import in node:
+0 && (module.exports = {
+  NiconicoProvider
+});
+//# sourceMappingURL=index.cjs.map

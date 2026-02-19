@@ -14,12 +14,11 @@
     "./niconico": {
       "types": "./dist/providers/niconico/index.d.ts",
       "import": "./dist/providers/niconico/index.js",
-      "require": "./dist/providers/niconico/index.mjs"
+      "require": "./dist/providers/niconico/index.cjs"
     }
   },
   "scripts": {
-    "build": "rollup -c",
-    "prepare": "rollup -c",
+    "build": "tsup",
     "test": "vitest run",
     "test:watch": "vitest",
     "verify": "tsx scripts/verify-connection.ts"
@@ -40,13 +39,9 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "@rollup/plugin-typescript": "^12.3.0",
     "@types/node": "^22.0.0",
     "@types/ws": "^8.5.0",
-    "rollup": "^4.57.1",
-    "rollup-plugin-dts": "^6.3.0",
-    "rollup-plugin-esbuild": "^6.2.1",
-    "tslib": "^2.8.1",
+    "tsup": "^8.5.1",
     "tsx": "^4.0.0",
     "typescript": "^5.6.0",
     "vitest": "^3.0.0"
