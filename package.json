@@ -8,11 +8,13 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
     },
     "./niconico": {
       "types": "./dist/providers/niconico/index.d.ts",
-      "import": "./dist/providers/niconico/index.js"
+      "import": "./dist/providers/niconico/index.js",
+      "require": "./dist/providers/niconico/index.mjs"
     }
   },
   "scripts": {
@@ -33,20 +35,18 @@
     "Claude <noreply@anthropic.com>"
   ],
   "license": "MIT",
-  "files": [
-    "dist",
-    "README.md"
-  ],
   "dependencies": {
     "protobufjs": "^7.4.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@rollup/plugin-typescript": "^12.3.0",
     "@types/node": "^22.0.0",
     "@types/ws": "^8.5.0",
     "rollup": "^4.57.1",
     "rollup-plugin-dts": "^6.3.0",
     "rollup-plugin-esbuild": "^6.2.1",
+    "tslib": "^2.8.1",
     "tsx": "^4.0.0",
     "typescript": "^5.6.0",
     "vitest": "^3.0.0"

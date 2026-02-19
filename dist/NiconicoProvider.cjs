@@ -1,8 +1,10 @@
-import { EventEmitter } from 'events';
-import WebSocket from 'ws';
-import protobuf from 'protobufjs/minimal.js';
+'use strict';
 
-class WebSocketClient extends EventEmitter {
+var events = require('events');
+var WebSocket = require('ws');
+var protobuf = require('protobufjs/minimal.js');
+
+class WebSocketClient extends events.EventEmitter {
   webSocketUrl;
   ws = null;
   keepSeatInterval = null;
@@ -593,7 +595,7 @@ function parsePackedSegment(data) {
 const MAX_BUFFER_SIZE$1 = 16 * 1024 * 1024;
 const CONNECT_TIMEOUT_MS$2 = 3e4;
 const INACTIVITY_TIMEOUT_MS$1 = 6e4;
-class MessageStream extends EventEmitter {
+class MessageStream extends events.EventEmitter {
   viewUri;
   cookies;
   buffer = new Uint8Array(0);
@@ -707,7 +709,7 @@ class MessageStream extends EventEmitter {
 const MAX_BUFFER_SIZE = 16 * 1024 * 1024;
 const CONNECT_TIMEOUT_MS$1 = 3e4;
 const INACTIVITY_TIMEOUT_MS = 6e4;
-class SegmentStream extends EventEmitter {
+class SegmentStream extends events.EventEmitter {
   segmentUri;
   cookies;
   buffer = new Uint8Array(0);
@@ -820,7 +822,7 @@ const MAX_CHAIN_DEPTH = 50;
 const FETCH_DELAY_MS = 100;
 const MAX_RESPONSE_SIZE = 16 * 1024 * 1024;
 const CONNECT_TIMEOUT_MS = 3e4;
-class BackwardStream extends EventEmitter {
+class BackwardStream extends events.EventEmitter {
   initialUri;
   cookies;
   stopped = false;
@@ -912,7 +914,7 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-class NiconicoProvider extends EventEmitter {
+class NiconicoProvider extends events.EventEmitter {
   liveId;
   cookies;
   maxRetries;
@@ -1225,5 +1227,6 @@ class NiconicoProvider extends EventEmitter {
   }
 }
 
-export { BackwardStream as B, NiconicoProvider as N };
-//# sourceMappingURL=NiconicoProvider.js.map
+exports.BackwardStream = BackwardStream;
+exports.NiconicoProvider = NiconicoProvider;
+//# sourceMappingURL=NiconicoProvider.cjs.map
