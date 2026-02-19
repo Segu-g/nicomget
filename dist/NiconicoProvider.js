@@ -148,6 +148,9 @@ function parseChunkedEntry(data) {
           result.segmentUri = parseMessageSegmentUri(subData);
         }
         break;
+      case 2:
+        result.backward = parseBackwardSegment(subData);
+        break;
       case 4:
         result.nextAt = parseReadyForNext(subData);
         break;
@@ -521,9 +524,65 @@ function parseOperatorComment(data) {
   }
   return result;
 }
+function parseBackwardSegment(data) {
+  const reader = new Reader(data);
+  const result = {};
+  while (reader.pos < reader.len) {
+    const tag = reader.uint32();
+    const field = tag >>> 3;
+    const wireType = tag & 7;
+    if (field === 2 && wireType === 2) {
+      const len = reader.uint32();
+      const subData = reader.buf.slice(reader.pos, reader.pos + len);
+      reader.pos += len;
+      result.segmentUri = parseUriField(subData);
+    } else {
+      reader.skipType(wireType);
+    }
+  }
+  return result;
+}
+function parseUriField(data) {
+  const reader = new Reader(data);
+  while (reader.pos < reader.len) {
+    const tag = reader.uint32();
+    const field = tag >>> 3;
+    const wireType = tag & 7;
+    if (field === 1 && wireType === 2) {
+      return reader.string();
+    }
+    reader.skipType(wireType);
+  }
+  return void 0;
+}
+function parsePackedSegment(data) {
+  const reader = new Reader(data);
+  const result = { messages: [] };
+  while (reader.pos < reader.len) {
+    const tag = reader.uint32();
+    const field = tag >>> 3;
+    const wireType = tag & 7;
+    if (wireType !== 2) {
+      reader.skipType(wireType);
+      continue;
+    }
+    const len = reader.uint32();
+    const subData = reader.buf.slice(reader.pos, reader.pos + len);
+    reader.pos += len;
+    switch (field) {
+      case 1:
+        result.messages.push(parseChunkedMessage(subData));
+        break;
+      case 2:
+        result.nextUri = parseUriField(subData);
+        break;
+    }
+  }
+  return result;
+}
 
 const MAX_BUFFER_SIZE$1 = 16 * 1024 * 1024;
-const CONNECT_TIMEOUT_MS$1 = 3e4;
+const CONNECT_TIMEOUT_MS$2 = 3e4;
 const INACTIVITY_TIMEOUT_MS$1 = 6e4;
 class MessageStream extends EventEmitter {
   constructor(viewUri, cookies) {
@@ -540,7 +599,7 @@ class MessageStream extends EventEmitter {
     this.controller = new AbortController();
     const connectTimer = setTimeout(() => {
       this.controller?.abort();
-    }, CONNECT_TIMEOUT_MS$1);
+    }, CONNECT_TIMEOUT_MS$2);
     try {
       const headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -615,6 +674,9 @@ class MessageStream extends EventEmitter {
         if (entry.segmentUri) {
           this.emit("segment", entry.segmentUri);
         }
+        if (entry.backward?.segmentUri) {
+          this.emit("backward", entry.backward.segmentUri);
+        }
         if (entry.nextAt) {
           nextAt = entry.nextAt;
         }
@@ -628,7 +690,7 @@ class MessageStream extends EventEmitter {
 }
 
 const MAX_BUFFER_SIZE = 16 * 1024 * 1024;
-const CONNECT_TIMEOUT_MS = 3e4;
+const CONNECT_TIMEOUT_MS$1 = 3e4;
 const INACTIVITY_TIMEOUT_MS = 6e4;
 class SegmentStream extends EventEmitter {
   constructor(segmentUri, cookies) {
@@ -642,7 +704,7 @@ class SegmentStream extends EventEmitter {
     this.controller = new AbortController();
     const connectTimer = setTimeout(() => {
       this.controller?.abort();
-    }, CONNECT_TIMEOUT_MS);
+    }, CONNECT_TIMEOUT_MS$1);
     try {
       const headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
@@ -733,15 +795,110 @@ class SegmentStream extends EventEmitter {
   }
 }
 
+const MAX_CHAIN_DEPTH = 50;
+const FETCH_DELAY_MS = 100;
+const MAX_RESPONSE_SIZE = 16 * 1024 * 1024;
+const CONNECT_TIMEOUT_MS = 3e4;
+class BackwardStream extends EventEmitter {
+  constructor(initialUri, cookies) {
+    super();
+    this.initialUri = initialUri;
+    this.cookies = cookies;
+  }
+  stopped = false;
+  async start() {
+    const segments = [];
+    let uri = this.initialUri;
+    let depth = 0;
+    while (uri && !this.stopped && depth < MAX_CHAIN_DEPTH) {
+      try {
+        const data = await this.fetchSegment(uri);
+        const packed = parsePackedSegment(data);
+        segments.push(packed.messages);
+        uri = packed.nextUri;
+        depth++;
+        if (uri && !this.stopped) {
+          await delay(FETCH_DELAY_MS);
+        }
+      } catch (error) {
+        if (!this.stopped) {
+          this.emit("error", error);
+        }
+        break;
+      }
+    }
+    if (this.stopped) return;
+    for (let i = segments.length - 1; i >= 0; i--) {
+      for (const msg of segments[i]) {
+        if (this.stopped) return;
+        for (const chat of msg.chats) {
+          this.emit("chat", chat);
+        }
+        for (const gift of msg.gifts) {
+          this.emit("gift", gift);
+        }
+        for (const emotion of msg.emotions) {
+          this.emit("emotion", emotion);
+        }
+        for (const notification of msg.notifications) {
+          this.emit("notification", notification);
+        }
+        if (msg.operatorComment) {
+          this.emit("operatorComment", msg.operatorComment);
+        }
+      }
+    }
+    if (!this.stopped) {
+      this.emit("end");
+    }
+  }
+  stop() {
+    this.stopped = true;
+  }
+  async fetchSegment(uri) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), CONNECT_TIMEOUT_MS);
+    try {
+      const headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+      };
+      if (this.cookies) headers["Cookie"] = this.cookies;
+      const response = await fetch(uri, {
+        headers,
+        signal: controller.signal
+      });
+      clearTimeout(timer);
+      if (!response.ok) {
+        throw new Error(`Backward segment server returned ${response.status}`);
+      }
+      const buf = await response.arrayBuffer();
+      if (buf.byteLength > MAX_RESPONSE_SIZE) {
+        throw new Error(`Response size ${buf.byteLength} exceeds limit ${MAX_RESPONSE_SIZE}`);
+      }
+      return new Uint8Array(buf);
+    } catch (error) {
+      clearTimeout(timer);
+      throw error;
+    }
+  }
+}
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 class NiconicoProvider extends EventEmitter {
   liveId;
   cookies;
   maxRetries;
   retryIntervalMs;
+  fetchBacklog;
+  backlogEvents;
   wsClient = null;
   messageStream = null;
   segmentStreams = [];
   fetchedSegments = /* @__PURE__ */ new Set();
+  backwardStream = null;
+  seenChatNos = /* @__PURE__ */ new Set();
   state = "disconnected";
   intentionalDisconnect = false;
   reconnectCount = 0;
@@ -752,6 +909,8 @@ class NiconicoProvider extends EventEmitter {
     this.cookies = options.cookies;
     this.maxRetries = options.maxRetries ?? 5;
     this.retryIntervalMs = options.retryIntervalMs ?? 5e3;
+    this.fetchBacklog = options.fetchBacklog ?? true;
+    this.backlogEvents = new Set(options.backlogEvents ?? ["chat"]);
   }
   async connect() {
     this.intentionalDisconnect = false;
@@ -798,6 +957,9 @@ class NiconicoProvider extends EventEmitter {
     for (const s of this.segmentStreams) s.stop();
     this.segmentStreams = [];
     this.fetchedSegments.clear();
+    this.backwardStream?.stop();
+    this.backwardStream = null;
+    this.seenChatNos.clear();
     this.wsClient = null;
     this.messageStream = null;
     this.setState("disconnected");
@@ -866,6 +1028,11 @@ class NiconicoProvider extends EventEmitter {
     this.messageStream.on("segment", (segmentUri) => {
       this.startSegmentStream(segmentUri);
     });
+    this.messageStream.on("backward", (backwardUri) => {
+      if (this.fetchBacklog) {
+        this.startBackwardStream(backwardUri);
+      }
+    });
     this.messageStream.on("next", (nextAt) => {
       this.replaceMessageStream(viewUri, nextAt);
     });
@@ -882,60 +1049,20 @@ class NiconicoProvider extends EventEmitter {
     this.fetchedSegments.add(segmentUri);
     const segment = new SegmentStream(segmentUri, this.cookies);
     segment.on("chat", (chat) => {
-      const comment = {
-        id: String(chat.no),
-        content: chat.content,
-        userId: chat.hashedUserId || (chat.rawUserId ? String(chat.rawUserId) : void 0),
-        userName: chat.name,
-        timestamp: /* @__PURE__ */ new Date(),
-        platform: "niconico",
-        raw: chat
-      };
-      this.emit("comment", comment);
+      if (this.isDuplicateChat(chat)) return;
+      this.emit("comment", this.mapChat(chat));
     });
     segment.on("gift", (nicoGift) => {
-      const gift = {
-        itemId: nicoGift.itemId,
-        itemName: nicoGift.itemName,
-        userId: nicoGift.advertiserUserId ? String(nicoGift.advertiserUserId) : void 0,
-        userName: nicoGift.advertiserName,
-        point: nicoGift.point,
-        message: nicoGift.message,
-        timestamp: /* @__PURE__ */ new Date(),
-        platform: "niconico",
-        raw: nicoGift
-      };
-      this.emit("gift", gift);
+      this.emit("gift", this.mapGift(nicoGift));
     });
     segment.on("emotion", (nicoEmotion) => {
-      const emotion = {
-        id: nicoEmotion.content,
-        timestamp: /* @__PURE__ */ new Date(),
-        platform: "niconico",
-        raw: nicoEmotion
-      };
-      this.emit("emotion", emotion);
+      this.emit("emotion", this.mapEmotion(nicoEmotion));
     });
     segment.on("notification", (nicoNotif) => {
-      const notification = {
-        type: nicoNotif.type,
-        message: nicoNotif.message,
-        timestamp: /* @__PURE__ */ new Date(),
-        platform: "niconico",
-        raw: nicoNotif
-      };
-      this.emit("notification", notification);
+      this.emit("notification", this.mapNotification(nicoNotif));
     });
     segment.on("operatorComment", (nicoOp) => {
-      const operatorComment = {
-        content: nicoOp.content,
-        name: nicoOp.name,
-        link: nicoOp.link,
-        timestamp: /* @__PURE__ */ new Date(),
-        platform: "niconico",
-        raw: nicoOp
-      };
-      this.emit("operatorComment", operatorComment);
+      this.emit("operatorComment", this.mapOperatorComment(nicoOp));
     });
     segment.on("error", (error) => {
       this.emit("error", error);
@@ -947,7 +1074,115 @@ class NiconicoProvider extends EventEmitter {
     this.segmentStreams.push(segment);
     segment.start().catch((err) => this.emit("error", err));
   }
+  startBackwardStream(backwardUri) {
+    if (this.backwardStream) return;
+    const backward = new BackwardStream(backwardUri, this.cookies);
+    this.backwardStream = backward;
+    if (this.backlogEvents.has("chat")) {
+      backward.on("chat", (chat) => {
+        if (this.isDuplicateChat(chat)) return;
+        this.emit("comment", this.mapChat(chat, true));
+      });
+    }
+    if (this.backlogEvents.has("gift")) {
+      backward.on("gift", (nicoGift) => {
+        this.emit("gift", this.mapGift(nicoGift, true));
+      });
+    }
+    if (this.backlogEvents.has("emotion")) {
+      backward.on("emotion", (nicoEmotion) => {
+        this.emit("emotion", this.mapEmotion(nicoEmotion, true));
+      });
+    }
+    if (this.backlogEvents.has("notification")) {
+      backward.on("notification", (nicoNotif) => {
+        this.emit("notification", this.mapNotification(nicoNotif, true));
+      });
+    }
+    if (this.backlogEvents.has("operatorComment")) {
+      backward.on("operatorComment", (nicoOp) => {
+        this.emit("operatorComment", this.mapOperatorComment(nicoOp, true));
+      });
+    }
+    backward.on("error", (error) => {
+      this.emit("error", error);
+    });
+    backward.on("end", () => {
+      if (this.backwardStream === backward) {
+        this.backwardStream = null;
+      }
+    });
+    backward.start().catch((err) => this.emit("error", err));
+  }
+  /** chat.no ベースの重複排除（no > 0 のみ対象） */
+  isDuplicateChat(chat) {
+    if (chat.no <= 0) return false;
+    if (this.seenChatNos.has(chat.no)) return true;
+    this.seenChatNos.add(chat.no);
+    return false;
+  }
+  mapChat(chat, isHistory) {
+    const comment = {
+      id: String(chat.no),
+      content: chat.content,
+      userId: chat.hashedUserId || (chat.rawUserId ? String(chat.rawUserId) : void 0),
+      userName: chat.name,
+      timestamp: /* @__PURE__ */ new Date(),
+      platform: "niconico",
+      raw: chat
+    };
+    if (isHistory) comment.isHistory = true;
+    return comment;
+  }
+  mapGift(nicoGift, isHistory) {
+    const gift = {
+      itemId: nicoGift.itemId,
+      itemName: nicoGift.itemName,
+      userId: nicoGift.advertiserUserId ? String(nicoGift.advertiserUserId) : void 0,
+      userName: nicoGift.advertiserName,
+      point: nicoGift.point,
+      message: nicoGift.message,
+      timestamp: /* @__PURE__ */ new Date(),
+      platform: "niconico",
+      raw: nicoGift
+    };
+    if (isHistory) gift.isHistory = true;
+    return gift;
+  }
+  mapEmotion(nicoEmotion, isHistory) {
+    const emotion = {
+      id: nicoEmotion.content,
+      timestamp: /* @__PURE__ */ new Date(),
+      platform: "niconico",
+      raw: nicoEmotion
+    };
+    if (isHistory) emotion.isHistory = true;
+    return emotion;
+  }
+  mapNotification(nicoNotif, isHistory) {
+    const notification = {
+      type: nicoNotif.type,
+      message: nicoNotif.message,
+      timestamp: /* @__PURE__ */ new Date(),
+      platform: "niconico",
+      raw: nicoNotif
+    };
+    if (isHistory) notification.isHistory = true;
+    return notification;
+  }
+  mapOperatorComment(nicoOp, isHistory) {
+    const operatorComment = {
+      content: nicoOp.content,
+      name: nicoOp.name,
+      link: nicoOp.link,
+      timestamp: /* @__PURE__ */ new Date(),
+      platform: "niconico",
+      raw: nicoOp
+    };
+    if (isHistory) operatorComment.isHistory = true;
+    return operatorComment;
+  }
 }
 
-export { NiconicoProvider as N };
+export { BackwardStream as B, NiconicoProvider as N };
 //# sourceMappingURL=NiconicoProvider.js.map

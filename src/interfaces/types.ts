@@ -14,6 +14,8 @@ export interface Comment {
   platform: string;
   /** プラットフォーム固有の生データ */
   raw: unknown;
+  /** 過去コメント（バックログ）かどうか */
+  isHistory?: boolean;
 }
 
 /** ギフト（投げ銭） */
@@ -36,6 +38,8 @@ export interface Gift {
   platform: string;
   /** プラットフォーム固有の生データ */
   raw: unknown;
+  /** 過去コメント（バックログ）かどうか */
+  isHistory?: boolean;
 }
 
 /** エモーション（スタンプ等） */
@@ -48,6 +52,8 @@ export interface Emotion {
   platform: string;
   /** プラットフォーム固有の生データ */
   raw: unknown;
+  /** 過去コメント（バックログ）かどうか */
+  isHistory?: boolean;
 }
 
 /** 放送者コメント */
@@ -64,6 +70,8 @@ export interface OperatorComment {
   platform: string;
   /** プラットフォーム固有の生データ */
   raw: unknown;
+  /** 過去コメント（バックログ）かどうか */
+  isHistory?: boolean;
 }
 
 /** 通知 (SimpleNotificationV2 の EMOTION 以外) */
@@ -78,6 +86,8 @@ export interface Notification {
   platform: string;
   /** プラットフォーム固有の生データ */
   raw: unknown;
+  /** 過去コメント（バックログ）かどうか */
+  isHistory?: boolean;
 }
 
 /** 接続状態 */

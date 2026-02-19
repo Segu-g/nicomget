@@ -3,6 +3,7 @@ import { MessageStream } from '../src/providers/niconico/MessageStream.js';
 import {
   createSegmentEntry,
   createNextEntry,
+  createBackwardEntry,
 } from './helpers/protobufTestData.js';
 
 describe('MessageStream', () => {
@@ -61,6 +62,37 @@ describe('MessageStream', () => {
       'https://example.com/seg/1',
       'https://example.com/seg/2',
     ]);
+  });
+
+  it('ChunkedEntry(backward)からbackwardイベントを発火する', () => {
+    const stream = new MessageStream('https://example.com/view', undefined);
+    const backwards: string[] = [];
+    stream.on('backward', (uri: string) => backwards.push(uri));
+
+    const data = createBackwardEntry('https://example.com/packed/1');
+    stream.handleData(data);
+
+    expect(backwards).toEqual(['https://example.com/packed/1']);
+  });
+
+  it('segment と backward を同時に含むデータを処理できる', () => {
+    const stream = new MessageStream('https://example.com/view', undefined);
+    const segments: string[] = [];
+    const backwards: string[] = [];
+    stream.on('segment', (uri: string) => segments.push(uri));
+    stream.on('backward', (uri: string) => backwards.push(uri));
+
+    const seg = createSegmentEntry('https://example.com/seg/1');
+    const back = createBackwardEntry('https://example.com/packed/1');
+
+    const combined = new Uint8Array(seg.length + back.length);
+    combined.set(seg, 0);
+    combined.set(back, seg.length);
+
+    stream.handleData(combined);
+
+    expect(segments).toEqual(['https://example.com/seg/1']);
+    expect(backwards).toEqual(['https://example.com/packed/1']);
   });
 
   it('stopでバッファがクリアされる', () => {

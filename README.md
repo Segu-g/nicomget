@@ -7,6 +7,7 @@
 ## Features
 
 - ニコニコ生放送のコメントをリアルタイム取得
+- 過去コメント（バックログ）の自動取得（時系列順）
 - ギフト・エモーション・各種通知・放送者コメントの取得
 - WebSocket 切断時の自動再接続（リトライ回数・間隔を設定可能）
 - TypeScript / ESM 対応
@@ -28,7 +29,8 @@ const provider = new NiconicoProvider({
 });
 
 provider.on('comment', (comment) => {
-  console.log(`${comment.userId}: ${comment.content}`);
+  const tag = comment.isHistory ? '[過去]' : '[Live]';
+  console.log(`${tag} ${comment.userId}: ${comment.content}`);
 });
 
 provider.on('gift', (gift) => {
@@ -66,6 +68,29 @@ const provider = new NiconicoProvider({
   cookies: 'user_session=...', // ログイン済みCookie（任意）
   maxRetries: 5,             // 再接続の最大試行回数（デフォルト: 5）
   retryIntervalMs: 5000,     // 再接続の間隔 ms（デフォルト: 5000）
+  fetchBacklog: true,        // 過去コメント取得（デフォルト: true）
+  backlogEvents: ['chat'],   // 過去コメントで取得するイベント種別（デフォルト: ['chat']）
+});
+```
+
+#### `backlogEvents`
+
+バックログで取得するイベント種別を配列で指定します。デフォルトは `['chat']`（チャットのみ）。
+
+| 値 | 説明 |
+|---|---|
+| `'chat'` | コメント |
+| `'gift'` | ギフト |
+| `'emotion'` | エモーション |
+| `'notification'` | 通知 |
+| `'operatorComment'` | 放送者コメント |
+
+全イベントを取得する場合:
+
+```typescript
+const provider = new NiconicoProvider({
+  liveId: 'lv123456789',
+  backlogEvents: ['chat', 'gift', 'emotion', 'notification', 'operatorComment'],
 });
 ```
 
@@ -91,6 +116,7 @@ interface Comment {
   timestamp: Date;     // 受信日時
   platform: string;    // "niconico"
   raw: unknown;        // プラットフォーム固有の生データ (NicoChat)
+  isHistory?: boolean; // 過去コメントの場合 true
 }
 
 interface Gift {
@@ -103,6 +129,7 @@ interface Gift {
   timestamp: Date;     // 受信日時
   platform: string;    // "niconico"
   raw: unknown;        // プラットフォーム固有の生データ (NicoGift)
+  isHistory?: boolean; // 過去コメントの場合 true
 }
 
 interface Emotion {
@@ -110,6 +137,7 @@ interface Emotion {
   timestamp: Date;     // 受信日時
   platform: string;    // "niconico"
   raw: unknown;        // プラットフォーム固有の生データ (NicoEmotion)
+  isHistory?: boolean; // 過去コメントの場合 true
 }
 
 interface Notification {
@@ -118,6 +146,7 @@ interface Notification {
   timestamp: Date;       // 受信日時
   platform: string;      // "niconico"
   raw: unknown;          // プラットフォーム固有の生データ (NicoNotification)
+  isHistory?: boolean;   // 過去コメントの場合 true
 }
 
 interface OperatorComment {
@@ -127,6 +156,7 @@ interface OperatorComment {
   timestamp: Date;     // 受信日時
   platform: string;    // "niconico"
   raw: unknown;        // プラットフォーム固有の生データ (NicoOperatorComment)
+  isHistory?: boolean; // 過去コメントの場合 true
 }
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error';

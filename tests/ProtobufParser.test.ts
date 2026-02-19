@@ -4,6 +4,7 @@ import {
   extractMessages,
   parseChunkedEntry,
   parseChunkedMessage,
+  parsePackedSegment,
 } from '../src/providers/niconico/ProtobufParser.js';
 import {
   encodeLengthDelimited,
@@ -26,6 +27,10 @@ import {
   createSimpleNotificationV2NicoliveMessage,
   createOperatorCommentState,
   createSignalMessage,
+  createBackwardSegment,
+  createChunkedEntryWithBackward,
+  createPackedSegment,
+  createPackedSegmentNext,
 } from './helpers/protobufTestData.js';
 
 describe('readLengthDelimitedMessage', () => {
@@ -137,13 +142,23 @@ describe('parseChunkedEntry', () => {
     expect(result.nextAt).toBe('1700000000');
   });
 
-  it('不明なフィールドをスキップできる', async () => {
+  it('BackwardSegmentからbackward URIを抽出できる', () => {
+    const backward = createBackwardSegment('https://example.com/packed/1');
+    const entry = createChunkedEntryWithBackward(backward);
+
+    const result = parseChunkedEntry(entry);
+    expect(result.backward).toBeDefined();
+    expect(result.backward!.segmentUri).toBe('https://example.com/packed/1');
+  });
+
+  it('backward と segment の両方を含むエントリをパースできる', async () => {
     const protobuf = await import('protobufjs/minimal.js');
     const Writer = protobuf.default.Writer;
     const writer = new Writer();
-    // field 2 (backward) - ダミーデータ
+    // field 2 (backward)
+    const backward = createBackwardSegment('https://example.com/packed');
     writer.uint32((2 << 3) | 2);
-    writer.bytes(new Uint8Array([0x01, 0x02]));
+    writer.bytes(backward);
     // field 1 (segment) with URI
     const segment = createMessageSegment('https://example.com/seg');
     writer.uint32((1 << 3) | 2);
@@ -152,6 +167,7 @@ describe('parseChunkedEntry', () => {
 
     const result = parseChunkedEntry(entry);
     expect(result.segmentUri).toBe('https://example.com/seg');
+    expect(result.backward?.segmentUri).toBe('https://example.com/packed');
   });
 });
 
@@ -439,5 +455,71 @@ describe('parseChunkedMessage - Signal', () => {
 
     const result = parseChunkedMessage(chunked);
     expect(result.signal).toBeUndefined();
+  });
+});
+
+describe('parsePackedSegment', () => {
+  it('ChunkedMessageをパースできる', () => {
+    const chat = createChatMessage({ no: 1, content: 'backward msg' });
+    const nicoliveMsg = createNicoliveMessage(chat);
+    const chunkedMsg = createChunkedMessage(nicoliveMsg);
+    const packed = createPackedSegment({ messages: [chunkedMsg] });
+
+    const result = parsePackedSegment(packed);
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0].chats).toHaveLength(1);
+    expect(result.messages[0].chats[0].content).toBe('backward msg');
+    expect(result.nextUri).toBeUndefined();
+  });
+
+  it('nextUriを抽出できる', () => {
+    const packed = createPackedSegment({
+      messages: [],
+      nextUri: 'https://example.com/packed/next',
+    });
+
+    const result = parsePackedSegment(packed);
+    expect(result.messages).toHaveLength(0);
+    expect(result.nextUri).toBe('https://example.com/packed/next');
+  });
+
+  it('複数メッセージとnextUriを同時に処理できる', () => {
+    const chat1 = createChatMessage({ no: 1, content: 'msg1' });
+    const chat2 = createChatMessage({ no: 2, content: 'msg2' });
+    const cm1 = createChunkedMessage(createNicoliveMessage(chat1));
+    const cm2 = createChunkedMessage(createNicoliveMessage(chat2));
+    const packed = createPackedSegment({
+      messages: [cm1, cm2],
+      nextUri: 'https://example.com/packed/2',
+    });
+
+    const result = parsePackedSegment(packed);
+    expect(result.messages).toHaveLength(2);
+    expect(result.messages[0].chats[0].content).toBe('msg1');
+    expect(result.messages[1].chats[0].content).toBe('msg2');
+    expect(result.nextUri).toBe('https://example.com/packed/2');
+  });
+
+  it('空のPackedSegmentをパースできる', () => {
+    const result = parsePackedSegment(new Uint8Array(0));
+    expect(result.messages).toHaveLength(0);
+    expect(result.nextUri).toBeUndefined();
+  });
+
+  it('Gift/Emotion/Notificationを含むPackedSegmentをパースできる', () => {
+    const gift = createGiftMessage({ itemId: 'g1', advertiserName: 'user', point: 100, message: '', itemName: 'item' });
+    const giftMsg = createChunkedMessage(createGiftNicoliveMessage(gift));
+
+    const emotionNotif = createSimpleNotificationV2(2, '🎉');
+    const emotionMsg = createChunkedMessage(createSimpleNotificationV2NicoliveMessage(emotionNotif));
+
+    const packed = createPackedSegment({ messages: [giftMsg, emotionMsg] });
+
+    const result = parsePackedSegment(packed);
+    expect(result.messages).toHaveLength(2);
+    expect(result.messages[0].gifts).toHaveLength(1);
+    expect(result.messages[0].gifts[0].itemId).toBe('g1');
+    expect(result.messages[1].emotions).toHaveLength(1);
+    expect(result.messages[1].emotions[0].content).toBe('🎉');
   });
 });

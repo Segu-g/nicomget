@@ -366,3 +366,63 @@ export function createFullSignalMessage(signalValue: number = 0): Uint8Array {
   const signal = createSignalMessage(signalValue);
   return encodeLengthDelimited(signal);
 }
+
+// --- BackwardSegment / PackedSegment ヘルパー ---
+
+/**
+ * PackedSegment.Next メッセージを生成 { uri=1(string) }
+ */
+export function createPackedSegmentNext(uri: string): Uint8Array {
+  const writer = new Writer();
+  writer.uint32((1 << 3) | 2); // field 1 (uri), length-delimited
+  writer.string(uri);
+  return writer.finish();
+}
+
+/**
+ * BackwardSegment メッセージを生成
+ * { until=1(Timestamp), segment=2(PackedSegment.Next), snapshot=3(StateSnapshot) }
+ */
+export function createBackwardSegment(segmentUri: string): Uint8Array {
+  const writer = new Writer();
+  const next = createPackedSegmentNext(segmentUri);
+  writer.uint32((2 << 3) | 2); // field 2 (segment), length-delimited
+  writer.bytes(next);
+  return writer.finish();
+}
+
+/** ChunkedEntry で BackwardSegment をラップ (field 2 = backward) */
+export function createChunkedEntryWithBackward(backward: Uint8Array): Uint8Array {
+  const writer = new Writer();
+  writer.uint32((2 << 3) | 2); // field 2 (backward), length-delimited
+  writer.bytes(backward);
+  return writer.finish();
+}
+
+/** Backward URI を含む ChunkedEntry (Length-Delimited) を生成 */
+export function createBackwardEntry(segmentUri: string): Uint8Array {
+  const backward = createBackwardSegment(segmentUri);
+  const entry = createChunkedEntryWithBackward(backward);
+  return encodeLengthDelimited(entry);
+}
+
+/**
+ * PackedSegment メッセージを生成（RAW protobuf, length-delimited ストリーミングではない）
+ * { messages=1(repeated ChunkedMessage), next=2(Next), snapshot=3(StateSnapshot) }
+ */
+export function createPackedSegment(options: {
+  messages: Uint8Array[];
+  nextUri?: string;
+}): Uint8Array {
+  const writer = new Writer();
+  for (const msg of options.messages) {
+    writer.uint32((1 << 3) | 2); // field 1 (messages), length-delimited
+    writer.bytes(msg);
+  }
+  if (options.nextUri) {
+    const next = createPackedSegmentNext(options.nextUri);
+    writer.uint32((2 << 3) | 2); // field 2 (next), length-delimited
+    writer.bytes(next);
+  }
+  return writer.finish();
+}

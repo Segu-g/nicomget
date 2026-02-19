@@ -129,6 +129,9 @@ export class MessageStream extends EventEmitter {
         if (entry.segmentUri) {
           this.emit('segment', entry.segmentUri);
         }
+        if (entry.backward?.segmentUri) {
+          this.emit('backward', entry.backward.segmentUri);
+        }
         if (entry.nextAt) {
           nextAt = entry.nextAt;
         }

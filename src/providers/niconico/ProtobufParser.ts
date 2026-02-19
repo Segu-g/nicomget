@@ -3,9 +3,12 @@ const { Reader } = protobuf;
 
 /**
  * Proto定義 (n-air-app/nicolive-comment-protobuf v2025.1117.170000):
- *   ChunkedEntry { oneof: segment=1(MessageSegment), backward=2, previous=3, next=4(ReadyForNext) }
+ *   ChunkedEntry { oneof: segment=1(MessageSegment), backward=2(BackwardSegment), previous=3, next=4(ReadyForNext) }
  *   MessageSegment { from=1(Timestamp), until=2(Timestamp), uri=3(string) }
  *   ReadyForNext { at=1(int64) }
+ *   BackwardSegment { until=1(Timestamp), segment=2(PackedSegment.Next), snapshot=3(StateSnapshot) }
+ *   PackedSegment { messages=1(repeated ChunkedMessage), next=2(Next), snapshot=3(StateSnapshot) }
+ *   PackedSegment.Next { uri=1(string) }
  *   ChunkedMessage { meta=1(Meta), oneof payload: message=2(NicoliveMessage), state=4(NicoliveState), signal=5(Signal) }
  *   NicoliveMessage { oneof data: chat=1, simple_notification=7, gift=8, nicoad=9,
  *     tag_updated=17, moderator_updated=18, ssng_updated=19, overflowed_chat=20,
@@ -78,10 +81,22 @@ export interface NicoOperatorComment {
   link?: string;
 }
 
+/** BackwardSegmentの解析結果 */
+export interface BackwardSegmentResult {
+  segmentUri?: string;
+}
+
 /** ChunkedEntryの解析結果 */
 export interface ChunkedEntryResult {
   segmentUri?: string;
   nextAt?: string;
+  backward?: BackwardSegmentResult;
+}
+
+/** PackedSegmentの解析結果 */
+export interface PackedSegmentResult {
+  messages: ChunkedMessageResult[];
+  nextUri?: string;
 }
 
 /** ChunkedMessageの解析結果 */
@@ -175,10 +190,12 @@ export function parseChunkedEntry(data: Uint8Array): ChunkedEntryResult {
           result.segmentUri = parseMessageSegmentUri(subData);
         }
         break;
+      case 2: // backward (BackwardSegment)
+        result.backward = parseBackwardSegment(subData);
+        break;
       case 4: // next (ReadyForNext)
         result.nextAt = parseReadyForNext(subData);
         break;
-      // field 2 (backward): skip
     }
   }
 
@@ -660,6 +677,90 @@ function parseOperatorComment(data: Uint8Array): NicoOperatorComment {
       default:
         reader.skipType(wireType);
         break;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * BackwardSegment: until=1(Timestamp), segment=2(PackedSegment.Next), snapshot=3(StateSnapshot)
+ * PackedSegment.Next: { uri=1(string) }
+ */
+function parseBackwardSegment(data: Uint8Array): BackwardSegmentResult {
+  const reader = new Reader(data);
+  const result: BackwardSegmentResult = {};
+
+  while (reader.pos < reader.len) {
+    const tag = reader.uint32();
+    const field = tag >>> 3;
+    const wireType = tag & 7;
+
+    if (field === 2 && wireType === 2) {
+      const len = reader.uint32();
+      const subData = reader.buf.slice(reader.pos, reader.pos + len);
+      reader.pos += len;
+      result.segmentUri = parseUriField(subData);
+    } else {
+      reader.skipType(wireType);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * URI サブメッセージ: { uri=1(string) }
+ * PackedSegment.Next や BackwardSegment.segment で使用。
+ */
+function parseUriField(data: Uint8Array): string | undefined {
+  const reader = new Reader(data);
+  while (reader.pos < reader.len) {
+    const tag = reader.uint32();
+    const field = tag >>> 3;
+    const wireType = tag & 7;
+    if (field === 1 && wireType === 2) {
+      return reader.string();
+    }
+    reader.skipType(wireType);
+  }
+  return undefined;
+}
+
+/**
+ * PackedSegmentをパースする。
+ * BackwardSegment の segment URI から取得される RAW protobuf データ。
+ *
+ * field 1: messages (repeated ChunkedMessage)
+ * field 2: next (PackedSegment.Next) — 次のPackedSegment URI
+ * field 3: snapshot (StateSnapshot) — スキップ
+ */
+export function parsePackedSegment(data: Uint8Array): PackedSegmentResult {
+  const reader = new Reader(data);
+  const result: PackedSegmentResult = { messages: [] };
+
+  while (reader.pos < reader.len) {
+    const tag = reader.uint32();
+    const field = tag >>> 3;
+    const wireType = tag & 7;
+
+    if (wireType !== 2) {
+      reader.skipType(wireType);
+      continue;
+    }
+
+    const len = reader.uint32();
+    const subData = reader.buf.slice(reader.pos, reader.pos + len);
+    reader.pos += len;
+
+    switch (field) {
+      case 1: // messages (repeated ChunkedMessage)
+        result.messages.push(parseChunkedMessage(subData));
+        break;
+      case 2: // next (PackedSegment.Next)
+        result.nextUri = parseUriField(subData);
+        break;
+      // field 3 (snapshot): skip
     }
   }
 

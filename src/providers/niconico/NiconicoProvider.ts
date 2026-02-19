@@ -5,12 +5,20 @@ import type { NicoChat, NicoGift, NicoEmotion, NicoNotification, NicoOperatorCom
 import { WebSocketClient } from './WebSocketClient.js';
 import { MessageStream } from './MessageStream.js';
 import { SegmentStream } from './SegmentStream.js';
+import { BackwardStream } from './BackwardStream.js';
+
+/** バックログで取得するイベント種別 */
+export type BacklogEventType = 'chat' | 'gift' | 'emotion' | 'notification' | 'operatorComment';
 
 export interface NiconicoProviderOptions {
   liveId: string;
   cookies?: string;
   maxRetries?: number;
   retryIntervalMs?: number;
+  /** 過去コメント（バックログ）を取得するか（デフォルト: true） */
+  fetchBacklog?: boolean;
+  /** バックログで取得するイベント種別（デフォルト: ['chat'] — チャットのみ） */
+  backlogEvents?: BacklogEventType[];
 }
 
 /**
@@ -22,10 +30,14 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
   private readonly cookies?: string;
   private readonly maxRetries: number;
   private readonly retryIntervalMs: number;
+  private readonly fetchBacklog: boolean;
+  private readonly backlogEvents: Set<BacklogEventType>;
   private wsClient: WebSocketClient | null = null;
   private messageStream: MessageStream | null = null;
   private segmentStreams: SegmentStream[] = [];
   private fetchedSegments = new Set<string>();
+  private backwardStream: BackwardStream | null = null;
+  private seenChatNos = new Set<number>();
   private state: ConnectionState = 'disconnected';
   private intentionalDisconnect = false;
   private reconnectCount = 0;
@@ -37,6 +49,8 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
     this.cookies = options.cookies;
     this.maxRetries = options.maxRetries ?? 5;
     this.retryIntervalMs = options.retryIntervalMs ?? 5000;
+    this.fetchBacklog = options.fetchBacklog ?? true;
+    this.backlogEvents = new Set(options.backlogEvents ?? ['chat']);
   }
 
   async connect(): Promise<void> {
@@ -94,6 +108,9 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
     for (const s of this.segmentStreams) s.stop();
     this.segmentStreams = [];
     this.fetchedSegments.clear();
+    this.backwardStream?.stop();
+    this.backwardStream = null;
+    this.seenChatNos.clear();
     this.wsClient = null;
     this.messageStream = null;
     this.setState('disconnected');
@@ -182,6 +199,12 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
       this.startSegmentStream(segmentUri);
     });
 
+    this.messageStream.on('backward', (backwardUri: string) => {
+      if (this.fetchBacklog) {
+        this.startBackwardStream(backwardUri);
+      }
+    });
+
     this.messageStream.on('next', (nextAt: string) => {
       this.replaceMessageStream(viewUri, nextAt);
     });
@@ -205,64 +228,24 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
     const segment = new SegmentStream(segmentUri, this.cookies);
 
     segment.on('chat', (chat: NicoChat) => {
-      const comment: Comment = {
-        id: String(chat.no),
-        content: chat.content,
-        userId: chat.hashedUserId || (chat.rawUserId ? String(chat.rawUserId) : undefined),
-        userName: chat.name,
-        timestamp: new Date(),
-        platform: 'niconico',
-        raw: chat,
-      };
-      this.emit('comment', comment);
+      if (this.isDuplicateChat(chat)) return;
+      this.emit('comment', this.mapChat(chat));
     });
 
     segment.on('gift', (nicoGift: NicoGift) => {
-      const gift: Gift = {
-        itemId: nicoGift.itemId,
-        itemName: nicoGift.itemName,
-        userId: nicoGift.advertiserUserId ? String(nicoGift.advertiserUserId) : undefined,
-        userName: nicoGift.advertiserName,
-        point: nicoGift.point,
-        message: nicoGift.message,
-        timestamp: new Date(),
-        platform: 'niconico',
-        raw: nicoGift,
-      };
-      this.emit('gift', gift);
+      this.emit('gift', this.mapGift(nicoGift));
     });
 
     segment.on('emotion', (nicoEmotion: NicoEmotion) => {
-      const emotion: Emotion = {
-        id: nicoEmotion.content,
-        timestamp: new Date(),
-        platform: 'niconico',
-        raw: nicoEmotion,
-      };
-      this.emit('emotion', emotion);
+      this.emit('emotion', this.mapEmotion(nicoEmotion));
     });
 
     segment.on('notification', (nicoNotif: NicoNotification) => {
-      const notification: Notification = {
-        type: nicoNotif.type,
-        message: nicoNotif.message,
-        timestamp: new Date(),
-        platform: 'niconico',
-        raw: nicoNotif,
-      };
-      this.emit('notification', notification);
+      this.emit('notification', this.mapNotification(nicoNotif));
     });
 
     segment.on('operatorComment', (nicoOp: NicoOperatorComment) => {
-      const operatorComment: OperatorComment = {
-        content: nicoOp.content,
-        name: nicoOp.name,
-        link: nicoOp.link,
-        timestamp: new Date(),
-        platform: 'niconico',
-        raw: nicoOp,
-      };
-      this.emit('operatorComment', operatorComment);
+      this.emit('operatorComment', this.mapOperatorComment(nicoOp));
     });
 
     segment.on('error', (error: Error) => {
@@ -276,5 +259,130 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
 
     this.segmentStreams.push(segment);
     segment.start().catch((err) => this.emit('error', err));
+  }
+
+  private startBackwardStream(backwardUri: string): void {
+    // 既に backward stream が動作中の場合はスキップ
+    if (this.backwardStream) return;
+
+    const backward = new BackwardStream(backwardUri, this.cookies);
+    this.backwardStream = backward;
+
+    if (this.backlogEvents.has('chat')) {
+      backward.on('chat', (chat: NicoChat) => {
+        if (this.isDuplicateChat(chat)) return;
+        this.emit('comment', this.mapChat(chat, true));
+      });
+    }
+
+    if (this.backlogEvents.has('gift')) {
+      backward.on('gift', (nicoGift: NicoGift) => {
+        this.emit('gift', this.mapGift(nicoGift, true));
+      });
+    }
+
+    if (this.backlogEvents.has('emotion')) {
+      backward.on('emotion', (nicoEmotion: NicoEmotion) => {
+        this.emit('emotion', this.mapEmotion(nicoEmotion, true));
+      });
+    }
+
+    if (this.backlogEvents.has('notification')) {
+      backward.on('notification', (nicoNotif: NicoNotification) => {
+        this.emit('notification', this.mapNotification(nicoNotif, true));
+      });
+    }
+
+    if (this.backlogEvents.has('operatorComment')) {
+      backward.on('operatorComment', (nicoOp: NicoOperatorComment) => {
+        this.emit('operatorComment', this.mapOperatorComment(nicoOp, true));
+      });
+    }
+
+    backward.on('error', (error: Error) => {
+      this.emit('error', error);
+    });
+
+    backward.on('end', () => {
+      if (this.backwardStream === backward) {
+        this.backwardStream = null;
+      }
+    });
+
+    backward.start().catch((err) => this.emit('error', err));
+  }
+
+  /** chat.no ベースの重複排除（no > 0 のみ対象） */
+  private isDuplicateChat(chat: NicoChat): boolean {
+    if (chat.no <= 0) return false;
+    if (this.seenChatNos.has(chat.no)) return true;
+    this.seenChatNos.add(chat.no);
+    return false;
+  }
+
+  private mapChat(chat: NicoChat, isHistory?: boolean): Comment {
+    const comment: Comment = {
+      id: String(chat.no),
+      content: chat.content,
+      userId: chat.hashedUserId || (chat.rawUserId ? String(chat.rawUserId) : undefined),
+      userName: chat.name,
+      timestamp: new Date(),
+      platform: 'niconico',
+      raw: chat,
+    };
+    if (isHistory) comment.isHistory = true;
+    return comment;
+  }
+
+  private mapGift(nicoGift: NicoGift, isHistory?: boolean): Gift {
+    const gift: Gift = {
+      itemId: nicoGift.itemId,
+      itemName: nicoGift.itemName,
+      userId: nicoGift.advertiserUserId ? String(nicoGift.advertiserUserId) : undefined,
+      userName: nicoGift.advertiserName,
+      point: nicoGift.point,
+      message: nicoGift.message,
+      timestamp: new Date(),
+      platform: 'niconico',
+      raw: nicoGift,
+    };
+    if (isHistory) gift.isHistory = true;
+    return gift;
+  }
+
+  private mapEmotion(nicoEmotion: NicoEmotion, isHistory?: boolean): Emotion {
+    const emotion: Emotion = {
+      id: nicoEmotion.content,
+      timestamp: new Date(),
+      platform: 'niconico',
+      raw: nicoEmotion,
+    };
+    if (isHistory) emotion.isHistory = true;
+    return emotion;
+  }
+
+  private mapNotification(nicoNotif: NicoNotification, isHistory?: boolean): Notification {
+    const notification: Notification = {
+      type: nicoNotif.type,
+      message: nicoNotif.message,
+      timestamp: new Date(),
+      platform: 'niconico',
+      raw: nicoNotif,
+    };
+    if (isHistory) notification.isHistory = true;
+    return notification;
+  }
+
+  private mapOperatorComment(nicoOp: NicoOperatorComment, isHistory?: boolean): OperatorComment {
+    const operatorComment: OperatorComment = {
+      content: nicoOp.content,
+      name: nicoOp.name,
+      link: nicoOp.link,
+      timestamp: new Date(),
+      platform: 'niconico',
+      raw: nicoOp,
+    };
+    if (isHistory) operatorComment.isHistory = true;
+    return operatorComment;
   }
 }

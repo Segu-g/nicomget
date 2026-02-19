@@ -1,4 +1,4 @@
-export { N as NiconicoProvider } from '../../NiconicoProvider.js';
+export { B as BackwardStream, N as NiconicoProvider } from '../../NiconicoProvider.js';
 import 'events';
 import 'ws';
 import 'protobufjs/minimal.js';

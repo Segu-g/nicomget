@@ -20,11 +20,16 @@ WebSocket (wss://a.live2.nicovideo.jp/...)
 
 メッセージサーバー (HTTP streaming, viewUri?at=now)
   → ChunkedEntry のストリーム
-  → segment URI / nextAt を取得
+  → segment URI / backward URI / nextAt を取得
 
 セグメントサーバー (HTTP streaming, segment URI)
   → ChunkedMessage のストリーム
   → Chat / Gift / Notification / OperatorComment を取得
+
+過去コメントサーバー (HTTP GET, backward segment URI)
+  → PackedSegment (RAW protobuf)
+  → ChunkedMessage 配列 + next URI
+  → next URI チェーンで過去に遡る
 ```
 
 ## ChunkedEntry (メッセージサーバー)
@@ -32,7 +37,7 @@ WebSocket (wss://a.live2.nicovideo.jp/...)
 | Field | Wire Type | Type | 説明 |
 |-------|-----------|------|------|
 | 1 | LD | MessageSegment | 現在のセグメント |
-| 2 | LD | BackwardSegment | 過去セグメント（スキップ） |
+| 2 | LD | BackwardSegment | 過去セグメント（**対応済み**） |
 | 3 | LD | MessageSegment | 前のセグメント |
 | 4 | LD | ReadyForNext | 次のストリーム接続タイミング |
 
@@ -49,6 +54,40 @@ WebSocket (wss://a.live2.nicovideo.jp/...)
 | Field | Wire Type | Type | 説明 |
 |-------|-----------|------|------|
 | 1 | varint | int64 | **次の接続時刻** (Unix timestamp) |
+
+### BackwardSegment
+
+接続前に投稿された過去コメント（バックログ）を取得するためのエントリ。
+
+| Field | Wire Type | Type | 説明 |
+|-------|-----------|------|------|
+| 1 | LD | Timestamp | until |
+| 2 | LD | PackedSegment.Next | **セグメントURI** |
+| 3 | LD | StateSnapshot | スナップショット（スキップ） |
+
+- `segment` フィールド（field 2）の `uri` を HTTP GET で取得する
+- レスポンスは **RAW protobuf**（length-delimited ストリーミングではない）
+- レスポンスを `PackedSegment` としてパースする
+
+### PackedSegment
+
+BackwardSegment の segment URI から取得される RAW protobuf データ。
+
+| Field | Wire Type | Type | 説明 |
+|-------|-----------|------|------|
+| 1 | LD | ChunkedMessage (repeated) | **メッセージ配列** |
+| 2 | LD | PackedSegment.Next | 次のPackedSegment URI |
+| 3 | LD | StateSnapshot | スナップショット（スキップ） |
+
+#### PackedSegment.Next
+
+| Field | Wire Type | Type | 説明 |
+|-------|-----------|------|------|
+| 1 | LD | string | **URI** |
+
+- `next.uri` チェーンを辿ることで過去に遡る
+- チェーン追跡は最大 50 回まで（無限ループ防止）
+- リクエスト間に 100ms の待機（レート制限回避）
 
 ## ChunkedMessage (セグメントサーバー)
 
@@ -222,8 +261,11 @@ ChunkedMessage.state (field 4)
 |------|------|-----|
 | メッセージサイズ上限 | `ProtobufParser.readLengthDelimitedMessage` | 16 MB |
 | バッファサイズ上限 | `SegmentStream.handleData`, `MessageStream.handleData` | 16 MB |
-| HTTP接続タイムアウト | `SegmentStream.start`, `MessageStream.start` | 30秒 |
+| HTTP接続タイムアウト | `SegmentStream.start`, `MessageStream.start`, `BackwardStream.fetchSegment` | 30秒 |
 | ストリーミング無通信タイムアウト | `SegmentStream.readStream`, `MessageStream.readStream` | 60秒 |
+| レスポンスサイズ上限 | `BackwardStream.fetchSegment` | 16 MB |
+| チェーン追跡上限 | `BackwardStream.start` | 50回 |
+| リクエスト間待機 | `BackwardStream.start` | 100ms |
 | 放送ページ取得タイムアウト | `NiconicoProvider.fetchWebSocketUrl` | 30秒 |
 | keepSeat間隔のclamp | `WebSocketClient.startKeepSeat` | 10〜300秒 |
 | MessageStreamリスナー清掃 | `NiconicoProvider.replaceMessageStream` | `removeAllListeners()` |
