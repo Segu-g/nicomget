@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events';
+import proto from '@n-air-app/nicolive-comment-protobuf';
 
 /** プラットフォーム共通のコメント型 */
 interface Comment {
@@ -168,25 +169,12 @@ declare class NiconicoProvider extends EventEmitter implements ICommentProvider 
     private mapOperatorComment;
 }
 
-/** ニコニコ固有のChat生データ */
-interface NicoChat {
-    no: number;
-    vpos: number;
-    content: string;
-    name?: string;
-    rawUserId?: number;
-    hashedUserId?: string;
-}
-/** ニコニコ固有のGift生データ */
-interface NicoGift {
-    itemId: string;
-    advertiserUserId?: number;
-    advertiserName: string;
-    point: number;
-    message: string;
-    itemName: string;
-    contributionRank?: number;
-}
+/** ニコニコ固有のChat — ライブラリの Chat クラスそのもの */
+type NicoChat = proto.dwango.nicolive.chat.data.Chat;
+/** ニコニコ固有のGift — ライブラリの Gift クラスそのもの */
+type NicoGift = proto.dwango.nicolive.chat.data.Gift;
+/** ニコニコ固有の放送者コメント — ライブラリの OperatorComment クラスそのもの */
+type NicoOperatorComment = proto.dwango.nicolive.chat.data.OperatorComment;
 /** ニコニコ固有のエモーション (SimpleNotificationV2 type=EMOTION) */
 interface NicoEmotion {
     content: string;
@@ -197,12 +185,6 @@ type NicoNotificationType = 'unknown' | 'ichiba' | 'cruise' | 'program_extended'
 interface NicoNotification {
     type: NicoNotificationType;
     message: string;
-}
-/** ニコニコ固有の放送者コメント */
-interface NicoOperatorComment {
-    content: string;
-    name?: string;
-    link?: string;
 }
 
 export { type BacklogEventType as B, type Comment as C, type Emotion as E, type Gift as G, type ICommentProvider as I, type NicoChat as N, type OperatorComment as O, type NicoEmotion as a, type NicoGift as b, type NicoNotification as c, type NicoNotificationType as d, type NicoOperatorComment as e, NiconicoProvider as f, type NiconicoProviderOptions as g, type ConnectionState as h, type Notification as i };

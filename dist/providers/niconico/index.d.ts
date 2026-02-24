@@ -1,5 +1,6 @@
-export { B as BacklogEventType, N as NicoChat, a as NicoEmotion, b as NicoGift, c as NicoNotification, d as NicoNotificationType, e as NicoOperatorComment, f as NiconicoProvider, g as NiconicoProviderOptions } from '../../index-CHI0vM1-.js';
+export { B as BacklogEventType, N as NicoChat, a as NicoEmotion, b as NicoGift, c as NicoNotification, d as NicoNotificationType, e as NicoOperatorComment, f as NiconicoProvider, g as NiconicoProviderOptions } from '../../index-DkCUNtYT.js';
 import { EventEmitter } from 'events';
+import '@n-air-app/nicolive-comment-protobuf';
 
 /**
  * 過去コメント (BackwardSegment) 取得ストリーム。

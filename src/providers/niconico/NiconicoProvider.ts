@@ -321,12 +321,13 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
   }
 
   private mapChat(chat: NicoChat, isHistory?: boolean): Comment {
+    const rawUserId = chat.rawUserId != null ? Number(chat.rawUserId) : undefined;
     const comment: Comment = {
       id: String(chat.no),
       content: chat.content,
-      userId: chat.hashedUserId || (chat.rawUserId ? String(chat.rawUserId) : undefined),
-      userName: chat.name?.startsWith('a:') ? undefined : chat.name,
-      userIcon: chat.rawUserId ? `https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/${Math.floor(chat.rawUserId / 10000)}/${chat.rawUserId}.jpg` : undefined,
+      userId: chat.hashedUserId || (rawUserId ? String(rawUserId) : undefined),
+      userName: chat.name?.startsWith('a:') ? undefined : chat.name ?? undefined,
+      userIcon: rawUserId ? `https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/${Math.floor(rawUserId / 10000)}/${rawUserId}.jpg` : undefined,
       timestamp: new Date(),
       platform: 'niconico',
       raw: chat,
@@ -339,9 +340,9 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
     const gift: Gift = {
       itemId: nicoGift.itemId,
       itemName: nicoGift.itemName,
-      userId: nicoGift.advertiserUserId ? String(nicoGift.advertiserUserId) : undefined,
+      userId: nicoGift.advertiserUserId != null ? String(Number(nicoGift.advertiserUserId)) : undefined,
       userName: nicoGift.advertiserName,
-      point: nicoGift.point,
+      point: Number(nicoGift.point),
       message: nicoGift.message,
       timestamp: new Date(),
       platform: 'niconico',
@@ -377,8 +378,8 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
   private mapOperatorComment(nicoOp: NicoOperatorComment, isHistory?: boolean): OperatorComment {
     const operatorComment: OperatorComment = {
       content: nicoOp.content,
-      name: nicoOp.name,
-      link: nicoOp.link,
+      name: nicoOp.name ?? undefined,
+      link: nicoOp.link ?? undefined,
       timestamp: new Date(),
       platform: 'niconico',
       raw: nicoOp,

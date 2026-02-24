@@ -218,7 +218,7 @@ describe('parseChunkedMessage', () => {
     const result = parseChunkedMessage(chunked);
     expect(result.chats[0].content).toBe('hello');
     expect(result.chats[0].no).toBe(0);
-    expect(result.chats[0].hashedUserId).toBeUndefined();
+    expect(result.chats[0].hashedUserId).toBeNull();
   });
 
   it('複数のメッセージを連結してもパースできる', () => {
@@ -271,9 +271,9 @@ describe('parseChunkedMessage - Gift', () => {
     const result = parseChunkedMessage(chunked);
     expect(result.gifts).toHaveLength(1);
     expect(result.gifts[0].itemId).toBe('gift-001');
-    expect(result.gifts[0].advertiserUserId).toBe(12345);
+    expect(Number(result.gifts[0].advertiserUserId)).toBe(12345);
     expect(result.gifts[0].advertiserName).toBe('テスト太郎');
-    expect(result.gifts[0].point).toBe(500);
+    expect(Number(result.gifts[0].point)).toBe(500);
     expect(result.gifts[0].message).toBe('がんばれ！');
     expect(result.gifts[0].itemName).toBe('スーパーギフト');
     expect(result.gifts[0].contributionRank).toBe(3);
@@ -293,8 +293,8 @@ describe('parseChunkedMessage - Gift', () => {
     const result = parseChunkedMessage(chunked);
     expect(result.gifts).toHaveLength(1);
     expect(result.gifts[0].itemId).toBe('gift-min');
-    expect(result.gifts[0].advertiserUserId).toBeUndefined();
-    expect(result.gifts[0].contributionRank).toBeUndefined();
+    expect(result.gifts[0].advertiserUserId).toBeNull();
+    expect(result.gifts[0].contributionRank).toBeNull();
   });
 });
 
@@ -435,8 +435,8 @@ describe('parseChunkedMessage - OperatorComment', () => {
     const result = parseChunkedMessage(state);
     expect(result.operatorComment).toBeDefined();
     expect(result.operatorComment!.content).toBe('シンプルなお知らせ');
-    expect(result.operatorComment!.name).toBeUndefined();
-    expect(result.operatorComment!.link).toBeUndefined();
+    expect(result.operatorComment!.name).toBeNull();
+    expect(result.operatorComment!.link).toBeNull();
   });
 });
 

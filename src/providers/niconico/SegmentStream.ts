@@ -2,11 +2,6 @@ import { EventEmitter } from 'events';
 import {
   extractMessages,
   parseChunkedMessage,
-  type NicoChat,
-  type NicoGift,
-  type NicoEmotion,
-  type NicoNotification,
-  type NicoOperatorComment,
 } from './ProtobufParser.js';
 
 /** バッファサイズ上限 (16 MB) */

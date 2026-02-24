@@ -6,11 +6,13 @@ export default defineConfig({
     "src/providers/niconico/index.ts"
   ],
   format: ["esm", "cjs"],
-  dts: true,              // 型定義も自動生成
+  dts: {
+    only: true
+  },              // 型定義も自動生成
   splitting: false,       // ライブラリなら基本false
   sourcemap: true,
   clean: true,
   outDir: "dist",
   target: "es2020",
-  external: ["events", "ws", "protobufjs/minimal.js"],
+  external: ["events", "ws", "protobufjs/minimal.js", "@n-air-app/nicolive-comment-protobuf"],
 });

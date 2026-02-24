@@ -101,7 +101,7 @@ describe('SegmentStream', () => {
 
     expect(gifts).toHaveLength(1);
     expect(gifts[0].itemId).toBe('gift-001');
-    expect(gifts[0].point).toBe(500);
+    expect(Number(gifts[0].point)).toBe(500);
   });
 
   it('emotionイベントを発火する', () => {

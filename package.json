@@ -35,6 +35,7 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "@n-air-app/nicolive-comment-protobuf": "github:Segu-g/nicolive-comment-protobuf#v2025.602.163750-segument",
     "protobufjs": "^7.4.0",
     "ws": "^8.18.0"
   },
