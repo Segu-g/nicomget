@@ -10,8 +10,9 @@
 - 過去コメント（バックログ）の自動取得（時系列順）
 - ギフト・エモーション・各種通知・放送者コメントの取得
 - WebSocket 切断時の自動再接続（リトライ回数・間隔を設定可能）
-- TypeScript / ESM 対応
+- TypeScript / ESM・CJS 対応
 - イベントベース API（`comment`, `gift`, `emotion`, `notification`, `operatorComment`, `stateChange`, `error`）
+- protobuf デコードに [@n-air-app/nicolive-comment-protobuf](https://github.com/n-air-app/nicolive-comment-protobuf) を使用
 
 ## Install
 
@@ -164,6 +165,16 @@ interface OperatorComment {
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error';
 ```
 
+### Raw Types
+
+各イベントの `raw` フィールドには protobuf ライブラリのデコード結果がそのまま格納されます。
+
+- `NicoChat` = `dwango.nicolive.chat.data.Chat` — `rawUserId` は `Long | null`、`name` / `hashedUserId` は `string | null`
+- `NicoGift` = `dwango.nicolive.chat.data.Gift` — `point` は `number | Long`、`advertiserUserId` は `number | Long | null`
+- `NicoOperatorComment` = `dwango.nicolive.chat.data.OperatorComment` — `name` / `link` は `string | null`
+
+`Long` 値を数値に変換するには `Number()` を使用してください。
+
 ### Disconnect
 
 ```typescript
@@ -171,6 +182,18 @@ provider.disconnect();
 ```
 
 `disconnect()` を呼ぶと自動再接続は行われません。
+
+## Architecture
+
+```
+NiconicoProvider
+  ├── WebSocketClient        # 放送ページからメッセージサーバーURL取得
+  ├── MessageStream          # メッセージサーバーに接続し ChunkedEntry を解析
+  ├── SegmentStream          # セグメントサーバーからリアルタイムコメント取得
+  └── BackwardStream         # 過去コメント (PackedSegment) のチェーン取得
+```
+
+protobuf のデコードには `@n-air-app/nicolive-comment-protobuf` の `ChunkedEntry.decode()`, `ChunkedMessage.decode()`, `PackedSegment.decode()` を使用。ストリーミングのフレーミング層（Length-Delimited 分割）のみ `protobufjs/minimal.js` の `Reader` を使用。
 
 ## Requirements
 
