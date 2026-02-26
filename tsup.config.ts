@@ -6,10 +6,8 @@ export default defineConfig({
     "src/providers/niconico/index.ts"
   ],
   format: ["esm", "cjs"],
-  dts: {
-    only: true
-  },              // 型定義も自動生成
-  splitting: false,       // ライブラリなら基本false
+  dts: true,
+  splitting: false,
   sourcemap: true,
   clean: true,
   outDir: "dist",
