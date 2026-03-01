@@ -40,8 +40,13 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
   private seenChatNos = new Set<number>();
   private state: ConnectionState = 'disconnected';
   private intentionalDisconnect = false;
+  private _metadata: BroadcastMetadata | null = null;
   private reconnectCount = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+  get metadata(): BroadcastMetadata | null {
+    return this._metadata;
+  }
 
   constructor(options: NiconicoProviderOptions) {
     super();
@@ -53,7 +58,7 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
     this.backlogEvents = new Set(options.backlogEvents ?? ['chat']);
   }
 
-  async connect(): Promise<void> {
+  async connect(): Promise<BroadcastMetadata> {
     this.intentionalDisconnect = false;
     this.setState('connecting');
 
@@ -63,8 +68,10 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
 
       await this.connectWebSocket(wsUrl);
       this.reconnectCount = 0;
+      this._metadata = metadata;
       this.setState('connected');
       this.emit('metadata', metadata);
+      return metadata;
     } catch (error) {
       this.setState('error');
       throw error;
@@ -140,6 +147,7 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
         const { wsUrl, metadata } = await this.fetchWebSocketUrl();
         await this.connectWebSocket(wsUrl);
         this.reconnectCount = 0;
+        this._metadata = metadata;
         this.setState('connected');
         this.emit('metadata', metadata);
       } catch {

@@ -577,6 +577,7 @@ var NiconicoProvider = class extends import_events5.EventEmitter {
     __publicField(this, "seenChatNos", /* @__PURE__ */ new Set());
     __publicField(this, "state", "disconnected");
     __publicField(this, "intentionalDisconnect", false);
+    __publicField(this, "_metadata", null);
     __publicField(this, "reconnectCount", 0);
     __publicField(this, "reconnectTimer", null);
     this.liveId = options.liveId;
@@ -586,6 +587,9 @@ var NiconicoProvider = class extends import_events5.EventEmitter {
     this.fetchBacklog = options.fetchBacklog ?? true;
     this.backlogEvents = new Set(options.backlogEvents ?? ["chat"]);
   }
+  get metadata() {
+    return this._metadata;
+  }
   async connect() {
     this.intentionalDisconnect = false;
     this.setState("connecting");
@@ -593,8 +597,10 @@ var NiconicoProvider = class extends import_events5.EventEmitter {
       const { wsUrl, metadata } = await this.fetchWebSocketUrl();
       await this.connectWebSocket(wsUrl);
       this.reconnectCount = 0;
+      this._metadata = metadata;
       this.setState("connected");
       this.emit("metadata", metadata);
+      return metadata;
     } catch (error) {
       this.setState("error");
       throw error;
@@ -659,6 +665,7 @@ var NiconicoProvider = class extends import_events5.EventEmitter {
         const { wsUrl, metadata } = await this.fetchWebSocketUrl();
         await this.connectWebSocket(wsUrl);
         this.reconnectCount = 0;
+        this._metadata = metadata;
         this.setState("connected");
         this.emit("metadata", metadata);
       } catch {

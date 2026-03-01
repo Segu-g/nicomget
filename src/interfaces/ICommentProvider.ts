@@ -3,7 +3,8 @@ import type { BroadcastMetadata, Comment, ConnectionState, Gift, Emotion, Notifi
 
 /** プラットフォーム共通のコメントプロバイダーインターフェース */
 export interface ICommentProvider extends EventEmitter {
-  connect(): Promise<void>;
+  connect(): Promise<BroadcastMetadata>;
+  readonly metadata: BroadcastMetadata | null;
   disconnect(): void;
 
   on(event: 'comment', listener: (comment: Comment) => void): this;

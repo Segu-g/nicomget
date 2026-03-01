@@ -130,7 +130,8 @@ interface BroadcastMetadata {
 
 /** プラットフォーム共通のコメントプロバイダーインターフェース */
 interface ICommentProvider extends EventEmitter {
-    connect(): Promise<void>;
+    connect(): Promise<BroadcastMetadata>;
+    readonly metadata: BroadcastMetadata | null;
     disconnect(): void;
     on(event: 'comment', listener: (comment: Comment) => void): this;
     on(event: 'gift', listener: (gift: Gift) => void): this;
@@ -183,10 +184,12 @@ declare class NiconicoProvider extends EventEmitter implements ICommentProvider 
     private seenChatNos;
     private state;
     private intentionalDisconnect;
+    private _metadata;
     private reconnectCount;
     private reconnectTimer;
+    get metadata(): BroadcastMetadata | null;
     constructor(options: NiconicoProviderOptions);
-    connect(): Promise<void>;
+    connect(): Promise<BroadcastMetadata>;
     private connectWebSocket;
     disconnect(): void;
     private setState;
