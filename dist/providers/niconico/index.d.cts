@@ -1,4 +1,4 @@
-export { B as BacklogEventType, N as NicoChat, a as NicoEmotion, b as NicoGift, c as NicoNotification, d as NicoNotificationType, e as NicoOperatorComment, f as NiconicoProvider, g as NiconicoProviderOptions } from '../../index-DuBw-Yyv.cjs';
+export { B as BacklogEventType, N as NicoChat, a as NicoEmotion, b as NicoGift, c as NicoNotification, d as NicoNotificationType, e as NicoOperatorComment, f as NiconicoBroadcastMetadata, g as NiconicoProvider, h as NiconicoProviderOptions } from '../../index-Cq5ziNSA.cjs';
 import { EventEmitter } from 'events';
 import '@n-air-app/nicolive-comment-protobuf';
 

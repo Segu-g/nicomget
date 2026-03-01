@@ -96,9 +96,7 @@ type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error';
 interface BroadcastMetadata {
     /** 番組タイトル */
     title?: string;
-    /** 番組ステータス ('ON_AIR' | 'ENDED' | etc.) */
-    status?: string;
-    /** 番組説明（HTML含む） */
+    /** 番組説明 */
     description?: string;
     /** 番組開始時刻 */
     beginTime?: Date;
@@ -114,18 +112,10 @@ interface BroadcastMetadata {
     commentCount?: number;
     /** 放送者名 */
     broadcasterName?: string;
-    /** 放送者ID (user: userId, channel: channelId) */
+    /** 放送者ID */
     broadcasterUserId?: string;
-    /** 放送者種別 ('user' | 'channel') */
-    broadcasterType?: string;
     /** 放送者アイコンURL */
     broadcasterIconUrl?: string;
-    /** コミュニティ/チャンネルID */
-    socialGroupId?: string;
-    /** コミュニティ/チャンネル名 */
-    socialGroupName?: string;
-    /** コミュニティ/チャンネル種別 ('community' | 'channel') */
-    socialGroupType?: string;
 }
 
 /** プラットフォーム共通のコメントプロバイダーインターフェース */
@@ -155,6 +145,19 @@ interface ICommentProvider extends EventEmitter {
 
 /** バックログで取得するイベント種別 */
 type BacklogEventType = 'chat' | 'gift' | 'emotion' | 'notification' | 'operatorComment';
+/** ニコニコ生放送固有の放送メタデータ */
+interface NiconicoBroadcastMetadata extends BroadcastMetadata {
+    /** 番組ステータス ('ON_AIR' | 'ENDED' など、ニコ生固有の値) */
+    status?: string;
+    /** 放送者種別 ('user' | 'channel') */
+    broadcasterType?: string;
+    /** コミュニティ/チャンネルID */
+    socialGroupId?: string;
+    /** コミュニティ/チャンネル名 */
+    socialGroupName?: string;
+    /** コミュニティ/チャンネル種別 ('community' | 'channel') */
+    socialGroupType?: string;
+}
 interface NiconicoProviderOptions {
     liveId: string;
     cookies?: string;
@@ -187,9 +190,9 @@ declare class NiconicoProvider extends EventEmitter implements ICommentProvider 
     private _metadata;
     private reconnectCount;
     private reconnectTimer;
-    get metadata(): BroadcastMetadata | null;
+    get metadata(): NiconicoBroadcastMetadata | null;
     constructor(options: NiconicoProviderOptions);
-    connect(): Promise<BroadcastMetadata>;
+    connect(): Promise<NiconicoBroadcastMetadata>;
     private connectWebSocket;
     disconnect(): void;
     private setState;
@@ -227,4 +230,4 @@ interface NicoNotification {
     message: string;
 }
 
-export { type BacklogEventType as B, type Comment as C, type Emotion as E, type Gift as G, type ICommentProvider as I, type NicoChat as N, type OperatorComment as O, type NicoEmotion as a, type NicoGift as b, type NicoNotification as c, type NicoNotificationType as d, type NicoOperatorComment as e, NiconicoProvider as f, type NiconicoProviderOptions as g, type BroadcastMetadata as h, type ConnectionState as i, type Notification as j };
+export { type BacklogEventType as B, type Comment as C, type Emotion as E, type Gift as G, type ICommentProvider as I, type NicoChat as N, type OperatorComment as O, type NicoEmotion as a, type NicoGift as b, type NicoNotification as c, type NicoNotificationType as d, type NicoOperatorComment as e, type NiconicoBroadcastMetadata as f, NiconicoProvider as g, type NiconicoProviderOptions as h, type BroadcastMetadata as i, type ConnectionState as j, type Notification as k };

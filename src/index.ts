@@ -4,4 +4,4 @@ export type { BroadcastMetadata, Comment, ConnectionState, Gift, Emotion, Notifi
 
 // ニコニコプロバイダー
 export { NiconicoProvider } from './providers/niconico/index.js';
-export type { NiconicoProviderOptions, NicoChat, NicoGift, NicoEmotion, NicoNotification, NicoNotificationType, NicoOperatorComment } from './providers/niconico/index.js';
+export type { NiconicoProviderOptions, NiconicoBroadcastMetadata, NicoChat, NicoGift, NicoEmotion, NicoNotification, NicoNotificationType, NicoOperatorComment } from './providers/niconico/index.js';

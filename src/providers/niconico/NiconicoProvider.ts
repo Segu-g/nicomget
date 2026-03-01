@@ -10,6 +10,20 @@ import { BackwardStream } from './BackwardStream.js';
 /** バックログで取得するイベント種別 */
 export type BacklogEventType = 'chat' | 'gift' | 'emotion' | 'notification' | 'operatorComment';
 
+/** ニコニコ生放送固有の放送メタデータ */
+export interface NiconicoBroadcastMetadata extends BroadcastMetadata {
+  /** 番組ステータス ('ON_AIR' | 'ENDED' など、ニコ生固有の値) */
+  status?: string;
+  /** 放送者種別 ('user' | 'channel') */
+  broadcasterType?: string;
+  /** コミュニティ/チャンネルID */
+  socialGroupId?: string;
+  /** コミュニティ/チャンネル名 */
+  socialGroupName?: string;
+  /** コミュニティ/チャンネル種別 ('community' | 'channel') */
+  socialGroupType?: string;
+}
+
 export interface NiconicoProviderOptions {
   liveId: string;
   cookies?: string;
@@ -40,11 +54,11 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
   private seenChatNos = new Set<number>();
   private state: ConnectionState = 'disconnected';
   private intentionalDisconnect = false;
-  private _metadata: BroadcastMetadata | null = null;
+  private _metadata: NiconicoBroadcastMetadata | null = null;
   private reconnectCount = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-  get metadata(): BroadcastMetadata | null {
+  get metadata(): NiconicoBroadcastMetadata | null {
     return this._metadata;
   }
 
@@ -58,7 +72,7 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
     this.backlogEvents = new Set(options.backlogEvents ?? ['chat']);
   }
 
-  async connect(): Promise<BroadcastMetadata> {
+  async connect(): Promise<NiconicoBroadcastMetadata> {
     this.intentionalDisconnect = false;
     this.setState('connecting');
 
@@ -157,7 +171,7 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
   }
 
   /** 放送ページのHTMLからWebSocket URLと放送者情報を取得する */
-  private async fetchWebSocketUrl(): Promise<{ wsUrl: string; metadata: BroadcastMetadata }> {
+  private async fetchWebSocketUrl(): Promise<{ wsUrl: string; metadata: NiconicoBroadcastMetadata }> {
     const url = `https://live.nicovideo.jp/watch/${this.liveId}`;
     const headers: Record<string, string> = {
       'User-Agent':
@@ -196,7 +210,7 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
     const socialGroup = props.socialGroup;
     const stats = program?.statistics;
 
-    const metadata: BroadcastMetadata = {
+    const metadata: NiconicoBroadcastMetadata = {
       title: program?.title ?? undefined,
       status: program?.status ?? undefined,
       description: program?.description ?? undefined,
