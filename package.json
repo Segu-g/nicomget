@@ -1,6 +1,6 @@
 {
   "name": "nicomget",
-  "version": "2.2.3",
+  "version": "2.2.4",
   "description": "Multi-platform live comment provider library",
   "type": "module",
   "main": "./dist/index.js",

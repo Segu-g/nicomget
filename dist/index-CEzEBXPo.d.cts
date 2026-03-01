@@ -184,7 +184,7 @@ declare class NiconicoProvider extends EventEmitter implements ICommentProvider 
     private segmentStreams;
     private fetchedSegments;
     private backwardStream;
-    private processedBackwardUris;
+    private backlogFetched;
     private seenChatNos;
     private state;
     private intentionalDisconnect;
