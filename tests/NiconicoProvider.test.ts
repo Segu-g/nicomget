@@ -389,4 +389,55 @@ describe('NiconicoProvider', () => {
 
     vi.restoreAllMocks();
   });
+
+  it('disconnect 後に再接続するとバックログが再取得される', async () => {
+    const opState = createOperatorCommentState({ content: 'いらっしゃーい', name: '放送者' });
+    const packed = createPackedSegment({ messages: [opState] });
+
+    // backward URI のみ packed を返し、他は 404（MessageStream の fetch が backlogFetched を汚染しないように）
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url === 'https://example.com/packed/1') {
+        return new Response(packed, {
+          status: 200,
+          headers: { 'Content-Type': 'application/octet-stream' },
+        });
+      }
+      return new Response('Not Found', { status: 404 });
+    });
+
+    const provider = new NiconicoProvider({
+      liveId: 'lv123',
+      backlogEvents: ['operatorComment'],
+    });
+    provider.on('error', () => {});
+    (provider as any).fetchWebSocketUrl = async () =>
+      ({ wsUrl: `ws://localhost:${wsPort}`, metadata: {} });
+
+    const operatorComments: unknown[] = [];
+    provider.on('operatorComment', (op) => operatorComments.push(op));
+
+    // 1回目接続・バックログ取得
+    await provider.connect();
+    (provider as any).startBackwardStream('https://example.com/packed/1');
+    await new Promise<void>((resolve) =>
+      (provider as any).backwardStream.once('end', resolve),
+    );
+    expect(operatorComments).toHaveLength(1);
+
+    // disconnect でフラグリセット
+    provider.disconnect();
+    expect((provider as any).backlogFetched).toBe(false);
+
+    // 2回目接続・バックログが再取得される
+    await provider.connect();
+    (provider as any).startBackwardStream('https://example.com/packed/1');
+    await new Promise<void>((resolve) =>
+      (provider as any).backwardStream.once('end', resolve),
+    );
+    expect(operatorComments).toHaveLength(2);
+
+    provider.disconnect();
+    vi.restoreAllMocks();
+  });
 });
