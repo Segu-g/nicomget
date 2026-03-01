@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-## [2.1.0] - 2026-03-01
+## [2.2.0] - 2026-03-01
 
 ### Added
 
@@ -23,6 +23,13 @@
 
 - `BroadcastMetadata` をプラットフォーム共通フィールドのみに整理し、
   ニコ生固有フィールドを `NiconicoBroadcastMetadata` に分離
+
+## [2.1.0] - 2026-03-01
+
+### Added
+
+- `metadata` イベントを追加（接続成功時に放送者情報を emit）
+- `BroadcastMetadata` 型を追加（`broadcasterName`, `broadcasterUserId`）
 
 ## [2.0.0] - 2025
 
