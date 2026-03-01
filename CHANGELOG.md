@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [2.2.2] - 2026-03-02
+
+### Fixed
+
+- `operatorComment` バックログの重複 emit を正しく修正
+  （`processedBackwardUris` Set による URI 追跡では MessageStream 再接続ごとに異なる URI が来るため
+  スキップできなかった。boolean フラグ `backlogFetched` に変更し、
+  1セッションにつきバックログは初回1度のみ取得するように修正）
+
 ## [2.2.1] - 2026-03-02
 
 ### Fixed

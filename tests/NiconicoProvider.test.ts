@@ -356,7 +356,7 @@ describe('NiconicoProvider', () => {
     provider.disconnect();
   });
 
-  it('同じ backward URI を複数回受信しても operatorComment は1度しか emit しない', async () => {
+  it('backward URI が異なっても2回目以降の operatorComment バックログは emit しない', async () => {
     const opState = createOperatorCommentState({ content: 'いらっしゃーい', name: '放送者' });
     const packed = createPackedSegment({ messages: [opState] });
 
@@ -377,9 +377,13 @@ describe('NiconicoProvider', () => {
       (provider as any).backwardStream.once('end', resolve),
     );
 
-    // 2回目：同じ URI なのでスキップされるはず
-    (provider as any).startBackwardStream('https://example.com/packed/1');
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    // 2回目：MessageStream 再接続で異なる URI が来てもスキップされるはず
+    (provider as any).startBackwardStream('https://example.com/packed/2');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // 3回目：さらに異なる URI でもスキップ
+    (provider as any).startBackwardStream('https://example.com/packed/3');
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
     expect(operatorComments).toHaveLength(1);
 
