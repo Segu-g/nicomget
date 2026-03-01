@@ -50,6 +50,10 @@ provider.on('operatorComment', (op) => {
   console.log(`Operator: ${op.content}`);
 });
 
+provider.on('metadata', (meta) => {
+  console.log(`番組: ${meta.title} / 放送者: ${meta.broadcasterName}`);
+});
+
 provider.on('stateChange', (state) => {
   console.log(`状態: ${state}`);
 });
@@ -58,7 +62,12 @@ provider.on('error', (error) => {
   console.error(error);
 });
 
-await provider.connect();
+// connect() は NiconicoBroadcastMetadata を返す
+const meta = await provider.connect();
+console.log(meta.title, meta.status);
+
+// 接続後はプロパティからも参照可能
+console.log(provider.metadata?.broadcasterName);
 ```
 
 ### Options
@@ -99,6 +108,7 @@ const provider = new NiconicoProvider({
 
 | Event | Payload | Description |
 |-------|---------|-------------|
+| `metadata` | `NiconicoBroadcastMetadata` | 接続成功時に1度だけ発火 |
 | `comment` | `Comment` | コメントを受信した |
 | `gift` | `Gift` | ギフトを受信した |
 | `emotion` | `Emotion` | エモーションを受信した |
@@ -106,6 +116,8 @@ const provider = new NiconicoProvider({
 | `operatorComment` | `OperatorComment` | 放送者コメントを受信した |
 | `stateChange` | `ConnectionState` | 接続状態が変化した |
 | `error` | `Error` | エラーが発生した |
+
+`metadata` は `connect()` の戻り値でも取得できます。また、接続後は `provider.metadata` プロパティからいつでも参照できます（切断後も最後の値を保持）。
 
 ### Types
 
@@ -163,6 +175,30 @@ interface OperatorComment {
 }
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error';
+
+// プラットフォーム共通の放送メタデータ
+interface BroadcastMetadata {
+  title?: string;            // 番組タイトル
+  description?: string;      // 番組説明（HTML含む）
+  beginTime?: Date;          // 開始時刻
+  endTime?: Date;            // 終了時刻（予定含む）
+  thumbnailUrl?: string;     // サムネイルURL
+  tags?: string[];           // タグ一覧
+  watchCount?: number;       // 視聴者数
+  commentCount?: number;     // コメント数
+  broadcasterName?: string;  // 放送者名
+  broadcasterUserId?: string;// 放送者ID
+  broadcasterIconUrl?: string;// 放送者アイコンURL
+}
+
+// ニコニコ生放送固有の放送メタデータ（BroadcastMetadata を拡張）
+interface NiconicoBroadcastMetadata extends BroadcastMetadata {
+  status?: string;           // 番組ステータス ('ON_AIR' | 'ENDED' など)
+  broadcasterType?: string;  // 放送者種別 ('user' | 'channel')
+  socialGroupId?: string;    // コミュニティ/チャンネルID
+  socialGroupName?: string;  // コミュニティ/チャンネル名
+  socialGroupType?: string;  // コミュニティ/チャンネル種別 ('community' | 'channel')
+}
 ```
 
 ### Raw Types
