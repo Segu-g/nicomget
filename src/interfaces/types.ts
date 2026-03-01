@@ -94,3 +94,11 @@ export interface Notification {
 
 /** 接続状態 */
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error';
+
+/** 放送メタデータ（接続成功時に一度だけ発火） */
+export interface BroadcastMetadata {
+  /** 放送者名 */
+  broadcasterName?: string;
+  /** 放送者ユーザーID */
+  broadcasterUserId?: string;
+}

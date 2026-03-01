@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import type { ICommentProvider } from '../../interfaces/ICommentProvider.js';
-import type { Comment, ConnectionState, Gift, Emotion, Notification, OperatorComment } from '../../interfaces/types.js';
+import type { BroadcastMetadata, Comment, ConnectionState, Gift, Emotion, Notification, OperatorComment } from '../../interfaces/types.js';
 import type { NicoChat, NicoGift, NicoEmotion, NicoNotification, NicoOperatorComment } from './ProtobufParser.js';
 import { WebSocketClient } from './WebSocketClient.js';
 import { MessageStream } from './MessageStream.js';
@@ -58,12 +58,13 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
     this.setState('connecting');
 
     try {
-      // Step 1: 放送ページからWebSocket URLを取得
-      const webSocketUrl = await this.fetchWebSocketUrl();
+      // Step 1: 放送ページからWebSocket URLと放送者情報を取得
+      const { wsUrl, metadata } = await this.fetchWebSocketUrl();
 
-      await this.connectWebSocket(webSocketUrl);
+      await this.connectWebSocket(wsUrl);
       this.reconnectCount = 0;
       this.setState('connected');
+      this.emit('metadata', metadata);
     } catch (error) {
       this.setState('error');
       throw error;
@@ -136,18 +137,19 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
     this.reconnectTimer = setTimeout(async () => {
       this.reconnectTimer = null;
       try {
-        const webSocketUrl = await this.fetchWebSocketUrl();
-        await this.connectWebSocket(webSocketUrl);
+        const { wsUrl, metadata } = await this.fetchWebSocketUrl();
+        await this.connectWebSocket(wsUrl);
         this.reconnectCount = 0;
         this.setState('connected');
+        this.emit('metadata', metadata);
       } catch {
         this.scheduleReconnect();
       }
     }, this.retryIntervalMs);
   }
 
-  /** 放送ページのHTMLからWebSocket URLを取得する */
-  private async fetchWebSocketUrl(): Promise<string> {
+  /** 放送ページのHTMLからWebSocket URLと放送者情報を取得する */
+  private async fetchWebSocketUrl(): Promise<{ wsUrl: string; metadata: BroadcastMetadata }> {
     const url = `https://live.nicovideo.jp/watch/${this.liveId}`;
     const headers: Record<string, string> = {
       'User-Agent':
@@ -181,7 +183,13 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
       throw new Error('WebSocket URL not found in broadcast data');
     }
 
-    return wsUrl;
+    const supplier = props.program?.supplier;
+    const metadata: BroadcastMetadata = {
+      broadcasterName: supplier?.name ?? undefined,
+      broadcasterUserId: supplier?.userId != null ? String(supplier.userId) : undefined,
+    };
+
+    return { wsUrl, metadata };
   }
 
   private startMessageStream(viewUri: string): void {

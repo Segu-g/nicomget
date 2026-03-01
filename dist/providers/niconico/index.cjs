@@ -591,10 +591,11 @@ var NiconicoProvider = class extends import_events5.EventEmitter {
     this.intentionalDisconnect = false;
     this.setState("connecting");
     try {
-      const webSocketUrl = await this.fetchWebSocketUrl();
-      await this.connectWebSocket(webSocketUrl);
+      const { wsUrl, metadata } = await this.fetchWebSocketUrl();
+      await this.connectWebSocket(wsUrl);
       this.reconnectCount = 0;
       this.setState("connected");
+      this.emit("metadata", metadata);
     } catch (error) {
       this.setState("error");
       throw error;
@@ -656,16 +657,17 @@ var NiconicoProvider = class extends import_events5.EventEmitter {
     this.reconnectTimer = setTimeout(async () => {
       this.reconnectTimer = null;
       try {
-        const webSocketUrl = await this.fetchWebSocketUrl();
-        await this.connectWebSocket(webSocketUrl);
+        const { wsUrl, metadata } = await this.fetchWebSocketUrl();
+        await this.connectWebSocket(wsUrl);
         this.reconnectCount = 0;
         this.setState("connected");
+        this.emit("metadata", metadata);
       } catch {
         this.scheduleReconnect();
       }
     }, this.retryIntervalMs);
   }
-  /** 放送ページのHTMLからWebSocket URLを取得する */
+  /** 放送ページのHTMLからWebSocket URLと放送者情報を取得する */
   async fetchWebSocketUrl() {
     const url = `https://live.nicovideo.jp/watch/${this.liveId}`;
     const headers = {
@@ -689,7 +691,12 @@ var NiconicoProvider = class extends import_events5.EventEmitter {
     if (!wsUrl) {
       throw new Error("WebSocket URL not found in broadcast data");
     }
-    return wsUrl;
+    const supplier = props.program?.supplier;
+    const metadata = {
+      broadcasterName: supplier?.name ?? void 0,
+      broadcasterUserId: supplier?.userId != null ? String(supplier.userId) : void 0
+    };
+    return { wsUrl, metadata };
   }
   startMessageStream(viewUri) {
     this.replaceMessageStream(viewUri, "now");

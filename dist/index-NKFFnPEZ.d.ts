@@ -92,6 +92,13 @@ interface Notification {
 }
 /** 接続状態 */
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error';
+/** 放送メタデータ（接続成功時に一度だけ発火） */
+interface BroadcastMetadata {
+    /** 放送者名 */
+    broadcasterName?: string;
+    /** 放送者ユーザーID */
+    broadcasterUserId?: string;
+}
 
 /** プラットフォーム共通のコメントプロバイダーインターフェース */
 interface ICommentProvider extends EventEmitter {
@@ -102,6 +109,7 @@ interface ICommentProvider extends EventEmitter {
     on(event: 'emotion', listener: (emotion: Emotion) => void): this;
     on(event: 'notification', listener: (notification: Notification) => void): this;
     on(event: 'operatorComment', listener: (comment: OperatorComment) => void): this;
+    on(event: 'metadata', listener: (metadata: BroadcastMetadata) => void): this;
     on(event: 'end', listener: () => void): this;
     on(event: 'error', listener: (error: Error) => void): this;
     on(event: 'stateChange', listener: (state: ConnectionState) => void): this;
@@ -110,6 +118,7 @@ interface ICommentProvider extends EventEmitter {
     emit(event: 'emotion', emotion: Emotion): boolean;
     emit(event: 'notification', notification: Notification): boolean;
     emit(event: 'operatorComment', comment: OperatorComment): boolean;
+    emit(event: 'metadata', metadata: BroadcastMetadata): boolean;
     emit(event: 'end'): boolean;
     emit(event: 'error', error: Error): boolean;
     emit(event: 'stateChange', state: ConnectionState): boolean;
@@ -154,7 +163,7 @@ declare class NiconicoProvider extends EventEmitter implements ICommentProvider 
     disconnect(): void;
     private setState;
     private scheduleReconnect;
-    /** 放送ページのHTMLからWebSocket URLを取得する */
+    /** 放送ページのHTMLからWebSocket URLと放送者情報を取得する */
     private fetchWebSocketUrl;
     private startMessageStream;
     private replaceMessageStream;
@@ -187,4 +196,4 @@ interface NicoNotification {
     message: string;
 }
 
-export { type BacklogEventType as B, type Comment as C, type Emotion as E, type Gift as G, type ICommentProvider as I, type NicoChat as N, type OperatorComment as O, type NicoEmotion as a, type NicoGift as b, type NicoNotification as c, type NicoNotificationType as d, type NicoOperatorComment as e, NiconicoProvider as f, type NiconicoProviderOptions as g, type ConnectionState as h, type Notification as i };
+export { type BacklogEventType as B, type Comment as C, type Emotion as E, type Gift as G, type ICommentProvider as I, type NicoChat as N, type OperatorComment as O, type NicoEmotion as a, type NicoGift as b, type NicoNotification as c, type NicoNotificationType as d, type NicoOperatorComment as e, NiconicoProvider as f, type NiconicoProviderOptions as g, type BroadcastMetadata as h, type ConnectionState as i, type Notification as j };
