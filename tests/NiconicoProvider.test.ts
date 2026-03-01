@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NiconicoProvider } from '../src/providers/niconico/NiconicoProvider.js';
+import type { NiconicoBroadcastMetadata } from '../src/providers/niconico/NiconicoProvider.js';
 import type { Comment, ConnectionState } from '../src/interfaces/types.js';
 import WebSocket, { WebSocketServer } from 'ws';
 import http from 'http';
@@ -233,5 +234,122 @@ describe('NiconicoProvider', () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+
+  it('fetchWebSocketUrl が program/socialGroup フィールドをメタデータとして抽出する', async () => {
+    const provider = new NiconicoProvider({ liveId: 'lv123' });
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/watch/')) {
+        const props = JSON.stringify({
+          site: { relive: { webSocketUrl: `ws://localhost:${wsPort}` } },
+          program: {
+            title: 'テスト番組',
+            status: 'ON_AIR',
+            description: '番組の説明文',
+            beginTime: 1700000000,
+            endTime: 1700003600,
+            screenshot: { urlSet: { large: 'https://example.com/thumb.jpg' } },
+            tag: { list: [{ text: 'ゲーム' }, { text: 'テスト' }] },
+            statistics: { watchCount: 100, commentCount: 50 },
+            supplier: {
+              name: '放送者名',
+              programProviderId: '12345',
+              supplierType: 'user',
+              icons: { uri150x150: 'https://example.com/icon.jpg' },
+            },
+          },
+          socialGroup: {
+            id: 'co12345',
+            name: 'テストコミュニティ',
+            type: 'community',
+          },
+        }).replace(/"/g, '&quot;');
+        return new Response(
+          `<div id="embedded-data" data-props="${props}"></div>`,
+          { status: 200 },
+        );
+      }
+      return new Response('', { status: 404 });
+    };
+
+    try {
+      const { wsUrl, metadata } = await (provider as any).fetchWebSocketUrl();
+      expect(wsUrl).toBe(`ws://localhost:${wsPort}`);
+      expect(metadata.title).toBe('テスト番組');
+      expect(metadata.status).toBe('ON_AIR');
+      expect(metadata.description).toBe('番組の説明文');
+      expect(metadata.beginTime).toEqual(new Date(1700000000 * 1000));
+      expect(metadata.endTime).toEqual(new Date(1700003600 * 1000));
+      expect(metadata.thumbnailUrl).toBe('https://example.com/thumb.jpg');
+      expect(metadata.tags).toEqual(['ゲーム', 'テスト']);
+      expect(metadata.watchCount).toBe(100);
+      expect(metadata.commentCount).toBe(50);
+      expect(metadata.broadcasterName).toBe('放送者名');
+      expect(metadata.broadcasterUserId).toBe('12345');
+      expect(metadata.broadcasterType).toBe('user');
+      expect(metadata.broadcasterIconUrl).toBe('https://example.com/icon.jpg');
+      expect(metadata.socialGroupId).toBe('co12345');
+      expect(metadata.socialGroupName).toBe('テストコミュニティ');
+      expect(metadata.socialGroupType).toBe('community');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('connect() が NiconicoBroadcastMetadata を返す', async () => {
+    const provider = new NiconicoProvider({ liveId: 'lv123' });
+    provider.on('error', () => {});
+    (provider as any).fetchWebSocketUrl = async () => ({
+      wsUrl: `ws://localhost:${wsPort}`,
+      metadata: { title: 'テスト番組', status: 'ON_AIR', broadcasterName: '放送者名' },
+    });
+
+    const meta = await provider.connect();
+    expect(meta.title).toBe('テスト番組');
+    expect(meta.status).toBe('ON_AIR');
+    expect(meta.broadcasterName).toBe('放送者名');
+
+    provider.disconnect();
+  });
+
+  it('接続前は provider.metadata が null で、接続後に参照できる', async () => {
+    const provider = new NiconicoProvider({ liveId: 'lv123' });
+    provider.on('error', () => {});
+    (provider as any).fetchWebSocketUrl = async () => ({
+      wsUrl: `ws://localhost:${wsPort}`,
+      metadata: { title: 'テスト番組', broadcasterName: '放送者名' },
+    });
+
+    expect(provider.metadata).toBeNull();
+
+    await provider.connect();
+
+    expect(provider.metadata?.title).toBe('テスト番組');
+    expect(provider.metadata?.broadcasterName).toBe('放送者名');
+
+    provider.disconnect();
+  });
+
+  it('metadata イベントが接続時に発火する', async () => {
+    const provider = new NiconicoProvider({ liveId: 'lv123' });
+    provider.on('error', () => {});
+    (provider as any).fetchWebSocketUrl = async () => ({
+      wsUrl: `ws://localhost:${wsPort}`,
+      metadata: { title: 'テスト番組', status: 'ON_AIR' },
+    });
+
+    const metaEvents: NiconicoBroadcastMetadata[] = [];
+    provider.on('metadata', (m) => metaEvents.push(m));
+
+    await provider.connect();
+
+    expect(metaEvents).toHaveLength(1);
+    expect(metaEvents[0].title).toBe('テスト番組');
+    expect(metaEvents[0].status).toBe('ON_AIR');
+
+    provider.disconnect();
   });
 });
