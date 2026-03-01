@@ -86,7 +86,7 @@ describe('NiconicoProvider', () => {
 
     // fetchWebSocketUrlをオーバーライド
     (provider as any).fetchWebSocketUrl = async () =>
-      `ws://localhost:${wsPort}`;
+      ({ wsUrl: `ws://localhost:${wsPort}`, metadata: {} });
 
     await provider.connect();
 
@@ -101,7 +101,7 @@ describe('NiconicoProvider', () => {
     const provider = new NiconicoProvider({ liveId: 'lv123' });
     provider.on('error', () => {});
     (provider as any).fetchWebSocketUrl = async () =>
-      `ws://localhost:${wsPort}`;
+      ({ wsUrl: `ws://localhost:${wsPort}`, metadata: {} });
 
     await provider.connect();
     provider.disconnect();
@@ -119,7 +119,7 @@ describe('NiconicoProvider', () => {
     provider.on('stateChange', (state) => states.push(state));
     provider.on('error', () => {});
     (provider as any).fetchWebSocketUrl = async () =>
-      `ws://localhost:${wsPort}`;
+      ({ wsUrl: `ws://localhost:${wsPort}`, metadata: {} });
 
     await provider.connect();
     expect(states).toContain('connected');
@@ -158,7 +158,7 @@ describe('NiconicoProvider', () => {
     (provider as any).fetchWebSocketUrl = async () => {
       connectCount++;
       if (connectCount === 1) {
-        return `ws://localhost:${wsPort}`;
+        return { wsUrl: `ws://localhost:${wsPort}`, metadata: {} };
       }
       throw new Error('Connection refused');
     };
@@ -193,7 +193,7 @@ describe('NiconicoProvider', () => {
     provider.on('stateChange', (state) => states.push(state));
     provider.on('error', () => {});
     (provider as any).fetchWebSocketUrl = async () =>
-      `ws://localhost:${wsPort}`;
+      ({ wsUrl: `ws://localhost:${wsPort}`, metadata: {} });
 
     await provider.connect();
     provider.disconnect();
@@ -228,7 +228,7 @@ describe('NiconicoProvider', () => {
     };
 
     try {
-      const wsUrl = await (provider as any).fetchWebSocketUrl();
+      const { wsUrl } = await (provider as any).fetchWebSocketUrl();
       expect(wsUrl).toBe(`ws://localhost:${wsPort}`);
     } finally {
       globalThis.fetch = originalFetch;
