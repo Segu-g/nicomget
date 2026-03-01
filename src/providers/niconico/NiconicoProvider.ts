@@ -51,6 +51,7 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
   private segmentStreams: SegmentStream[] = [];
   private fetchedSegments = new Set<string>();
   private backwardStream: BackwardStream | null = null;
+  private processedBackwardUris = new Set<string>();
   private seenChatNos = new Set<number>();
   private state: ConnectionState = 'disconnected';
   private intentionalDisconnect = false;
@@ -132,6 +133,7 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
     this.fetchedSegments.clear();
     this.backwardStream?.stop();
     this.backwardStream = null;
+    this.processedBackwardUris.clear();
     this.seenChatNos.clear();
     this.wsClient = null;
     this.messageStream = null;
@@ -318,8 +320,10 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
   }
 
   private startBackwardStream(backwardUri: string): void {
-    // 既に backward stream が動作中の場合はスキップ
+    // 既に処理済み、または動作中の場合はスキップ
+    if (this.processedBackwardUris.has(backwardUri)) return;
     if (this.backwardStream) return;
+    this.processedBackwardUris.add(backwardUri);
 
     const backward = new BackwardStream(backwardUri, this.cookies);
     this.backwardStream = backward;

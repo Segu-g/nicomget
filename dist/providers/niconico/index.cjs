@@ -575,6 +575,7 @@ var NiconicoProvider = class extends import_events5.EventEmitter {
     __publicField(this, "segmentStreams", []);
     __publicField(this, "fetchedSegments", /* @__PURE__ */ new Set());
     __publicField(this, "backwardStream", null);
+    __publicField(this, "processedBackwardUris", /* @__PURE__ */ new Set());
     __publicField(this, "seenChatNos", /* @__PURE__ */ new Set());
     __publicField(this, "state", "disconnected");
     __publicField(this, "intentionalDisconnect", false);
@@ -641,6 +642,7 @@ var NiconicoProvider = class extends import_events5.EventEmitter {
     this.fetchedSegments.clear();
     this.backwardStream?.stop();
     this.backwardStream = null;
+    this.processedBackwardUris.clear();
     this.seenChatNos.clear();
     this.wsClient = null;
     this.messageStream = null;
@@ -781,7 +783,9 @@ var NiconicoProvider = class extends import_events5.EventEmitter {
     segment.start().catch((err) => this.emit("error", err));
   }
   startBackwardStream(backwardUri) {
+    if (this.processedBackwardUris.has(backwardUri)) return;
     if (this.backwardStream) return;
+    this.processedBackwardUris.add(backwardUri);
     const backward = new BackwardStream(backwardUri, this.cookies);
     this.backwardStream = backward;
     if (this.backlogEvents.has("chat")) {

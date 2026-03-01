@@ -7,6 +7,9 @@ import http from 'http';
 import {
   createSegmentEntry,
   createFullCommentMessage,
+  createOperatorCommentState,
+  createChunkedMessage,
+  createPackedSegment,
 } from './helpers/protobufTestData.js';
 
 describe('NiconicoProvider', () => {
@@ -351,5 +354,35 @@ describe('NiconicoProvider', () => {
     expect(metaEvents[0].status).toBe('ON_AIR');
 
     provider.disconnect();
+  });
+
+  it('同じ backward URI を複数回受信しても operatorComment は1度しか emit しない', async () => {
+    const opState = createOperatorCommentState({ content: 'いらっしゃーい', name: '放送者' });
+    const packed = createPackedSegment({ messages: [opState] });
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(packed, { status: 200, headers: { 'Content-Type': 'application/octet-stream' } }),
+    );
+
+    const provider = new NiconicoProvider({
+      liveId: 'lv123',
+      backlogEvents: ['operatorComment'],
+    });
+    const operatorComments: unknown[] = [];
+    provider.on('operatorComment', (op) => operatorComments.push(op));
+
+    // 1回目：終了まで待つ
+    (provider as any).startBackwardStream('https://example.com/packed/1');
+    await new Promise<void>((resolve) =>
+      (provider as any).backwardStream.once('end', resolve),
+    );
+
+    // 2回目：同じ URI なのでスキップされるはず
+    (provider as any).startBackwardStream('https://example.com/packed/1');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(operatorComments).toHaveLength(1);
+
+    vi.restoreAllMocks();
   });
 });
