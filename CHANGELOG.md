@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-03-02
+
+### Fixed
+
+- 同じ backward URI の再取得による `operatorComment` 重複 emit を修正
+  （処理済みの backward URI を Set で管理し、2回目以降をスキップ）
+
 ## [2.2.0] - 2026-03-01
 
 ### Added
