@@ -270,6 +270,43 @@ ChunkedMessage.state (field 4)
 | keepSeat間隔のclamp | `WebSocketClient.startKeepSeat` | 10〜300秒 |
 | MessageStreamリスナー清掃 | `NiconicoProvider.replaceMessageStream` | `removeAllListeners()` |
 
+## BroadcastMetadata（放送者・番組情報）
+
+`connect()` 成功後に `metadata` イベントで発火。`props.program` と `props.socialGroup` から抽出。
+
+### 番組情報 (props.program)
+
+| フィールド | JSON パス | 説明 |
+|-----------|----------|------|
+| `title` | `program.title` | 番組タイトル |
+| `status` | `program.status` | `'ON_AIR'` / `'ENDED'` など |
+| `description` | `program.description` | 番組説明（HTML含む） |
+| `beginTime` | `program.beginTime` | 開始時刻（Unix秒 → Date） |
+| `endTime` | `program.endTime` | 終了時刻（Unix秒 → Date） |
+| `thumbnailUrl` | `program.screenshot.urlSet.large` | スクリーンショット優先、なければ `thumbnail.small` |
+| `tags` | `program.tag.list[].text` | タグ一覧（文字列配列） |
+| `watchCount` | `program.statistics.watchCount` | 視聴者数 |
+| `commentCount` | `program.statistics.commentCount` | コメント数 |
+
+### 放送者情報 (props.program.supplier)
+
+| フィールド | JSON パス | 説明 |
+|-----------|----------|------|
+| `broadcasterName` | `supplier.name` | 放送者名 |
+| `broadcasterUserId` | `supplier.programProviderId` | ユーザーID（ユーザー放送）またはチャンネルID |
+| `broadcasterType` | `supplier.supplierType` | `'user'` / `'channel'` |
+| `broadcasterIconUrl` | `supplier.icons.uri150x150` | 放送者アイコンURL |
+
+> **注意**: `supplier.userId` フィールドは存在しない。正しくは `supplier.programProviderId`。
+
+### コミュニティ/チャンネル情報 (props.socialGroup)
+
+| フィールド | JSON パス | 説明 |
+|-----------|----------|------|
+| `socialGroupId` | `socialGroup.id` | コミュニティID (`co*`) / チャンネルID |
+| `socialGroupName` | `socialGroup.name` | コミュニティ/チャンネル名 |
+| `socialGroupType` | `socialGroup.type` | `'community'` / `'channel'` |
+
 ## デバッグスクリプト
 
 `scripts/debug/` に調査用スクリプトがある:

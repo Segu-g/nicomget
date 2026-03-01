@@ -656,10 +656,27 @@ var NiconicoProvider = class extends EventEmitter5 {
     if (!wsUrl) {
       throw new Error("WebSocket URL not found in broadcast data");
     }
-    const supplier = props.program?.supplier;
+    const program = props.program;
+    const supplier = program?.supplier;
+    const socialGroup = props.socialGroup;
+    const stats = program?.statistics;
     const metadata = {
+      title: program?.title ?? void 0,
+      status: program?.status ?? void 0,
+      description: program?.description ?? void 0,
+      beginTime: program?.beginTime != null ? new Date(program.beginTime * 1e3) : void 0,
+      endTime: program?.endTime != null ? new Date(program.endTime * 1e3) : void 0,
+      thumbnailUrl: program?.screenshot?.urlSet?.large ?? program?.screenshot?.urlSet?.middle ?? program?.thumbnail?.small ?? void 0,
+      tags: Array.isArray(program?.tag?.list) ? program.tag.list.map((t) => t.text) : void 0,
+      watchCount: stats?.watchCount ?? void 0,
+      commentCount: stats?.commentCount ?? void 0,
       broadcasterName: supplier?.name ?? void 0,
-      broadcasterUserId: supplier?.userId != null ? String(supplier.userId) : void 0
+      broadcasterUserId: supplier?.programProviderId ?? void 0,
+      broadcasterType: supplier?.supplierType ?? void 0,
+      broadcasterIconUrl: supplier?.icons?.uri150x150 ?? supplier?.icons?.uri50x50 ?? void 0,
+      socialGroupId: socialGroup?.id ?? void 0,
+      socialGroupName: socialGroup?.name ?? void 0,
+      socialGroupType: socialGroup?.type ?? void 0
     };
     return { wsUrl, metadata };
   }

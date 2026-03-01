@@ -97,8 +97,38 @@ export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'err
 
 /** 放送メタデータ（接続成功時に一度だけ発火） */
 export interface BroadcastMetadata {
+  /** 番組タイトル */
+  title?: string;
+  /** 番組ステータス ('ON_AIR' | 'ENDED' | etc.) */
+  status?: string;
+  /** 番組説明（HTML含む） */
+  description?: string;
+  /** 番組開始時刻 */
+  beginTime?: Date;
+  /** 番組終了時刻（予定含む） */
+  endTime?: Date;
+  /** サムネイルURL */
+  thumbnailUrl?: string;
+  /** タグ一覧 */
+  tags?: string[];
+  /** 視聴者数 */
+  watchCount?: number;
+  /** コメント数 */
+  commentCount?: number;
+
   /** 放送者名 */
   broadcasterName?: string;
-  /** 放送者ユーザーID */
+  /** 放送者ID (user: userId, channel: channelId) */
   broadcasterUserId?: string;
+  /** 放送者種別 ('user' | 'channel') */
+  broadcasterType?: string;
+  /** 放送者アイコンURL */
+  broadcasterIconUrl?: string;
+
+  /** コミュニティ/チャンネルID */
+  socialGroupId?: string;
+  /** コミュニティ/チャンネル名 */
+  socialGroupName?: string;
+  /** コミュニティ/チャンネル種別 ('community' | 'channel') */
+  socialGroupType?: string;
 }

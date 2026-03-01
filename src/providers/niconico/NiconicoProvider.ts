@@ -183,10 +183,36 @@ export class NiconicoProvider extends EventEmitter implements ICommentProvider {
       throw new Error('WebSocket URL not found in broadcast data');
     }
 
-    const supplier = props.program?.supplier;
+    const program = props.program;
+    const supplier = program?.supplier;
+    const socialGroup = props.socialGroup;
+    const stats = program?.statistics;
+
     const metadata: BroadcastMetadata = {
+      title: program?.title ?? undefined,
+      status: program?.status ?? undefined,
+      description: program?.description ?? undefined,
+      beginTime: program?.beginTime != null ? new Date(program.beginTime * 1000) : undefined,
+      endTime: program?.endTime != null ? new Date(program.endTime * 1000) : undefined,
+      thumbnailUrl:
+        program?.screenshot?.urlSet?.large ??
+        program?.screenshot?.urlSet?.middle ??
+        program?.thumbnail?.small ??
+        undefined,
+      tags: Array.isArray(program?.tag?.list)
+        ? program.tag.list.map((t: { text: string }) => t.text)
+        : undefined,
+      watchCount: stats?.watchCount ?? undefined,
+      commentCount: stats?.commentCount ?? undefined,
+
       broadcasterName: supplier?.name ?? undefined,
-      broadcasterUserId: supplier?.userId != null ? String(supplier.userId) : undefined,
+      broadcasterUserId: supplier?.programProviderId ?? undefined,
+      broadcasterType: supplier?.supplierType ?? undefined,
+      broadcasterIconUrl: supplier?.icons?.uri150x150 ?? supplier?.icons?.uri50x50 ?? undefined,
+
+      socialGroupId: socialGroup?.id ?? undefined,
+      socialGroupName: socialGroup?.name ?? undefined,
+      socialGroupType: socialGroup?.type ?? undefined,
     };
 
     return { wsUrl, metadata };
