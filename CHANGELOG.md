@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-03-01
+
+### Added
+
+- `BroadcastMetadata` に番組・放送者・コミュニティ情報を追加:
+  `title`, `description`, `beginTime`, `endTime`, `thumbnailUrl`, `tags`, `watchCount`, `commentCount`,
+  `broadcasterName`, `broadcasterUserId`, `broadcasterIconUrl`
+- `NiconicoBroadcastMetadata` 型を追加（`BroadcastMetadata` のニコ生固有拡張）:
+  `status`, `broadcasterType`, `socialGroupId`, `socialGroupName`, `socialGroupType`
+- `connect()` の戻り値を `Promise<NiconicoBroadcastMetadata>` に変更
+- `provider.metadata` プロパティを追加（接続後にインスタンスから参照可能）
+
+### Fixed
+
+- `broadcasterUserId` が常に `undefined` になるバグを修正
+  （`supplier.userId` → `supplier.programProviderId` に修正）
+
+### Changed
+
+- `BroadcastMetadata` をプラットフォーム共通フィールドのみに整理し、
+  ニコ生固有フィールドを `NiconicoBroadcastMetadata` に分離
+
+## [2.0.0] - 2025
+
 ### Breaking Changes
 
 - `NicoChat`, `NicoGift`, `NicoOperatorComment` の型が `@n-air-app/nicolive-comment-protobuf` ライブラリの protobuf クラスへの型エイリアスに変更
